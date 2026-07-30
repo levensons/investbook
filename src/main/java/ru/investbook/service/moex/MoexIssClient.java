@@ -22,6 +22,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spacious_team.broker.pojo.SecurityQuote;
 import org.spacious_team.broker.pojo.SecurityType;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface MoexIssClient {
@@ -33,6 +35,12 @@ public interface MoexIssClient {
     Optional<MoexMarketDescription> getMarket(String moexSecId);
 
     Optional<SecurityQuote> getQuote(String moexSecId, MoexMarketDescription market);
+
+    List<SecurityQuote> getQuoteHistory(
+            String isinOrContractName,
+            SecurityType securityType,
+            LocalDate from,
+            LocalDate to);
 
     /**
      * May be false negative (return false in case of no quotes on moex iss)

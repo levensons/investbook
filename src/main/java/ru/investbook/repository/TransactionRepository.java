@@ -47,6 +47,12 @@ public interface TransactionRepository extends
 
     Optional<TransactionEntity> findFirstBySecurityIdOrderByTimestampDesc(Integer securityId);
 
+    List<TransactionEntity> findByTimestampLessThanOrderByTimestampAscTradeIdAsc(Instant toDate);
+
+    List<TransactionEntity> findByAccountInAndTimestampLessThanOrderByTimestampAscTradeIdAsc(
+            Collection<String> accounts,
+            Instant toDate);
+
     /**
      * Returns stock market share, bonds ISINs and assets
      */

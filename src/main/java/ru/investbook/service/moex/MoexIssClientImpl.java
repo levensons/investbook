@@ -29,8 +29,10 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -87,6 +89,15 @@ public class MoexIssClientImpl implements MoexIssClient {
             "iss.meta=off&" +
             "iss.only=securities&" +
             "securities.columns=SECID,PREVDATE,PREVADMITTEDQUOTE,PREVSETTLEPRICE,PREVPRICE,ACCRUEDINT,LOTSIZE,LOTVALUE,MINSTEP,STEPPRICE";
+    private static final String quoteHistoryUri = "https://iss.moex.com/iss/history/engines/{engine}/markets/{market}/securities/{secId}.json?" +
+            "iss.meta=off&" +
+            "iss.only=history&" +
+            "history.columns=TRADEDATE,CLOSE,LEGALCLOSEPRICE,ADMITTEDQUOTE,FACEVALUE,ACCINT,CURRENCYID&" +
+            "from={from}&" +
+            "till={to}&" +
+            "start={start}&" +
+            "limit={limit}";
+    private static final int HISTORY_PAGE_SIZE = 100;
     private static final String contractDescription = "http://iss.moex.com/iss/securities/{secId}.json?" +
             "iss.meta=off&iss.only=description&description.columns=name,value";
     private static volatile int currentYear = getCurrentYear();
@@ -173,6 +184,49 @@ public class MoexIssClientImpl implements MoexIssClient {
                     .or(() -> quote); // не удалось вычислить, возвращаем без SecurityQuote.price
         }
         return quote;
+    }
+
+    @Override
+    public List<SecurityQuote> getQuoteHistory(
+            String isinOrContractName,
+            SecurityType securityType,
+            LocalDate from,
+            LocalDate to) {
+        return getSecId(isinOrContractName, securityType)
+                .flatMap(secId -> getMarket(secId)
+                        .map(market -> getQuoteHistory(secId, market, from, to)))
+                .orElseGet(List::of);
+    }
+
+    private List<SecurityQuote> getQuoteHistory(
+            String moexSecId,
+            MoexMarketDescription market,
+            LocalDate from,
+            LocalDate to) {
+        List<SecurityQuote> result = new ArrayList<>();
+        int start = 0;
+        while (true) {
+            Map<String, Object> variables = new HashMap<>(market.toMap());
+            variables.put("secId", moexSecId);
+            variables.put("from", from);
+            variables.put("to", to);
+            variables.put("start", start);
+            variables.put("limit", HISTORY_PAGE_SIZE);
+            List<Map<String, Object>> rows = Optional
+                    .ofNullable(restTemplate.getForObject(quoteHistoryUri, Map.class, variables))
+                    .map(MoexJsonResponseParser::convertFromIntObjectMap)
+                    .orElseGet(List::of);
+            rows.stream()
+                    .map(row -> MoexSecurityQuoteHelper.parseHistory(row, market.getCurrency()))
+                    .flatMap(Optional::stream)
+                    .map(SecurityQuoteBuilder::build)
+                    .forEach(result::add);
+            if (rows.size() < HISTORY_PAGE_SIZE) {
+                break;
+            }
+            start += HISTORY_PAGE_SIZE;
+        }
+        return result;
     }
 
     public boolean isDerivativeAndExpired(@Nullable String shortnameOrSecid, SecurityType securityType) {

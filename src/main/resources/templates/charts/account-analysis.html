@@ -1,0 +1,93 @@
+<!--
+  ~ InvestBook
+  ~ Copyright (C) 2026  Spacious Team <spacious-team@ya.ru>
+  ~
+  ~ This program is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU Affero General Public License as
+  ~ published by the Free Software Foundation, either version 3 of the
+  ~ License, or (at your option) any later version.
+  ~
+  ~ This program is distributed in the hope that it will be useful,
+  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  ~ GNU Affero General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU Affero General Public License
+  ~ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  -->
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <title>Доходность портфеля</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <link rel="stylesheet" href="/water-light.css">
+    <link rel="stylesheet" href="/water-wrapper.css">
+    <link rel="stylesheet" href="/charts.css">
+    <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+    <script defer src="/account-analysis-charts.js"></script>
+</head>
+<body>
+<h1>Диаграммы</h1>
+<a href="/">На главную</a><br>
+<p th:replace="~{charts/menu :: charts_menu}"></p>
+
+<form id="chart-filter" class="chart-filter">
+    <label>
+        с
+        <input id="from-date" name="from" type="date" th:value="${defaultFromDate}" required>
+    </label>
+    <label>
+        по
+        <input id="to-date" name="to" type="date" th:value="${defaultToDate}" required>
+    </label>
+    <button type="submit">Показать</button>
+
+    <fieldset th:if="${!allAccounts.isEmpty()}">
+        <legend>Счета</legend>
+        <label th:each="account : ${allAccounts}">
+            <input name="account"
+                   type="checkbox"
+                   th:value="${account}"
+                   th:checked="${activeAccounts.contains(account)}">
+            <span th:text="${account}"></span>
+        </label>
+    </fieldset>
+</form>
+
+<p id="chart-status" class="chart-status" role="status" aria-live="polite">Загружаю данные…</p>
+
+<section class="chart-card">
+    <h2>Активы и инвестиции, USD</h2>
+    <div id="assets-chart" class="xy-chart"></div>
+</section>
+
+<section class="chart-card">
+    <h2>Рост активов, %</h2>
+    <div id="growth-chart" class="xy-chart"></div>
+</section>
+
+<section class="chart-card">
+    <h2>Остаток денежных средств, USD</h2>
+    <div id="cash-chart" class="xy-chart"></div>
+</section>
+
+<p class="hint">
+    «Расчётная стоимость» строится ежедневно по количеству бумаг из сделок, историческим котировкам MOEX
+    и последнему известному денежному остатку. «Оценка брокера» содержит контрольные точки из загруженных отчётов.
+    В даты таких отчётов расчёт сверяется с общей оценкой брокера, а обнаруженная разница учитывается
+    до следующей контрольной точки.
+</p>
+
+<p class="hint">
+    «Чистые пополнения» и контрольные оценки брокера совпадают со значениями листа «Обзор» Excel-отчёта.
+    При первой загрузке периода приложение сохраняет историю котировок, поэтому построение может занять больше времени.
+</p>
+
+<p class="hint">
+    Эта страница требует интернет-соединения для загрузки библиотеки amCharts.
+</p>
+</body>
+</html>

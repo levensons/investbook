@@ -92,6 +92,45 @@ public class MoexSecurityQuoteHelper {
         }
     }
 
+    static Optional<SecurityQuoteBuilder> parseHistory(
+            Map<String, Object> description,
+            @Nullable String marketCurrency) {
+        try {
+            LocalDate date = LocalDate.parse(
+                    String.valueOf(requireNonNull(description.get("TRADEDATE"))),
+                    ISO_LOCAL_DATE);
+            BigDecimal quote = ofNullable(description.get("CLOSE"))
+                    .or(() -> ofNullable(description.get("LEGALCLOSEPRICE")))
+                    .or(() -> ofNullable(description.get("ADMITTEDQUOTE")))
+                    .map(MoexSecurityQuoteHelper::toBigDecimal)
+                    .orElseThrow();
+            @Nullable BigDecimal accruedInterest = ofNullable(description.get("ACCINT"))
+                    .map(MoexSecurityQuoteHelper::toBigDecimal)
+                    .orElse(null);
+            @Nullable BigDecimal price = null;
+            if (accruedInterest != null) {
+                price = toBigDecimal(description.get("FACEVALUE"))
+                        .multiply(quote)
+                        .divide(HUNDRED, 4, RoundingMode.HALF_UP);
+            }
+            String currency = ofNullable(description.get("CURRENCYID"))
+                    .map(String::valueOf)
+                    .orElse(marketCurrency == null ? "RUB" : marketCurrency);
+            if (currency.equalsIgnoreCase("SUR") || currency.equalsIgnoreCase("RUR")) {
+                currency = "RUB";
+            }
+            return Optional.of(SecurityQuote.builder()
+                    .timestamp(date.atStartOfDay(ZoneId.systemDefault()).toInstant())
+                    .quote(quote)
+                    .price(price)
+                    .accruedInterest(accruedInterest)
+                    .currency(currency));
+        } catch (Exception e) {
+            log.debug("Ответ истории MOEX ISS не содержит дневной котировки: {}", description, e);
+            return Optional.empty();
+        }
+    }
+
     private static BigDecimal toBigDecimal(@Nullable Object value) {
         return BigDecimal.valueOf(
                 Double.parseDouble(
