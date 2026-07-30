@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.investbook.entity.SecurityQuoteEntity;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Transactional(readOnly = true)
@@ -38,4 +40,14 @@ public interface SecurityQuoteRepository extends
             Instant date);
 
     Optional<SecurityQuoteEntity> findFirstByOrderByTimestampDesc();
+
+    List<SecurityQuoteEntity> findBySecurityIdAndTimestampBetweenOrderByTimestampAsc(
+            Integer securityId,
+            Instant from,
+            Instant to);
+
+    List<SecurityQuoteEntity> findBySecurityIdInAndTimestampBetweenOrderByTimestampAsc(
+            Collection<Integer> securityIds,
+            Instant from,
+            Instant to);
 }
