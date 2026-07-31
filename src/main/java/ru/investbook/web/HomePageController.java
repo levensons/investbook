@@ -54,7 +54,7 @@ public class HomePageController {
         Set<String> accounts = assetsAndCashService.getActiveAccounts();
         model.addAttribute("transactionsCount", transactionRepository.countByAccountIn(accounts));
         model.addAttribute("accounts", accounts);
-        model.addAttribute("assets", assetsAndCashService.getTotalAssetsInRub(accounts));
+        model.addAttribute("assets", assetsAndCashService.getTotalAssetsAtCurrentPricesInRub(accounts));
         model.addAttribute("cashBalance", assetsAndCashService.getTotalCashInRub(accounts));
         model.addAttribute("buildProperties", buildProperties);
         model.addAttribute("logoUrl",

@@ -24,11 +24,12 @@ import java.time.LocalDate;
 
 public record AccountAnalysisChartPoint(
         LocalDate date,
-        @Nullable Double assetsUsd,
-        @Nullable Double estimatedAssetsUsd,
-        @Nullable Double totalInvestmentUsd,
-        @Nullable Double assetsGrowth,
+        @Nullable Double assetsRub,
+        @Nullable Double estimatedAssetsRub,
+        @Nullable Double totalInvestmentRub,
+        @Nullable Double externalCashFlowRub,
         @Nullable Double estimatedAssetsGrowth,
-        @Nullable Double sp500Growth,
-        @Nullable Double totalCashUsd) {
+        @Nullable Double imoexGrowth,
+        @Nullable Double mcftrrGrowth,
+        @Nullable Double totalCashRub) {
 }

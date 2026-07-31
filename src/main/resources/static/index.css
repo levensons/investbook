@@ -156,6 +156,12 @@ a:hover {
     font-weight: bolder;
 }
 
+.assets .portfolio-value-status {
+    color: rgba(238, 238, 238, 0.55);
+    font-size: 14px;
+    margin: 12px 0 0;
+}
+
 .links {
     margin-bottom: 100px;
 }

@@ -33,6 +33,12 @@ public interface AssetsAndCashService {
 
     Optional<BigDecimal> getTotalAssetsInRub(Collection<String> accounts);
 
+    /**
+     * Returns the current portfolio value using the latest market quotes when available.
+     * Broker valuation is used only as a fallback for an account that cannot be valued by quotes.
+     */
+    Optional<BigDecimal> getTotalAssetsAtCurrentPricesInRub(Collection<String> accounts);
+
     Optional<BigDecimal> getTotalAssetsInRub(String account);
 
     Optional<BigDecimal> getTotalCashInRub(Collection<String> accounts);

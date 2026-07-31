@@ -30,9 +30,12 @@ import org.spacious_team.broker.report_parser.api.AbstractTransaction;
 import org.spacious_team.broker.report_parser.api.BrokerReport;
 import org.spacious_team.broker.report_parser.api.ReportTable;
 import org.spacious_team.broker.report_parser.api.ReportTables;
+import org.spacious_team.broker.report_parser.api.WrappingReportTable;
+
+import java.util.List;
 
 @Getter
-public class ReportTablesCachingWrapper implements ReportTables {
+public class ReportTablesCachingWrapper implements ReportTables, SecurityPositionReportTables {
 
     private final BrokerReport report;
     private final ReportTable<AccountProperty> accountPropertyTable;
@@ -43,6 +46,7 @@ public class ReportTablesCachingWrapper implements ReportTables {
     private final ReportTable<SecurityEventCashFlow> securityEventCashFlowTable;
     private final ReportTable<SecurityQuote> securityQuoteTable;
     private final ReportTable<ForeignExchangeRate> foreignExchangeRateTable;
+    private final ReportTable<SecurityPosition> securityPositionTable;
 
     public ReportTablesCachingWrapper(ReportTables wrappee) {
         this.report = wrappee.getReport();
@@ -54,5 +58,8 @@ public class ReportTablesCachingWrapper implements ReportTables {
         this.securityEventCashFlowTable = wrappee.getSecurityEventCashFlowTable();
         this.securityQuoteTable = wrappee.getSecurityQuoteTable();
         this.foreignExchangeRateTable = wrappee.getForeignExchangeRateTable();
+        this.securityPositionTable = wrappee instanceof SecurityPositionReportTables securityPositionTables ?
+                securityPositionTables.getSecurityPositionTable() :
+                WrappingReportTable.of(report, List.of());
     }
 }

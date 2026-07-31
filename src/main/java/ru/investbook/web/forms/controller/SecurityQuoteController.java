@@ -21,7 +21,6 @@ package ru.investbook.web.forms.controller;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -31,32 +30,24 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import ru.investbook.entity.SecurityQuoteEntity;
-import ru.investbook.repository.SecurityQuoteRepository;
 import ru.investbook.repository.SecurityRepository;
-import ru.investbook.service.moex.MoexIssSecurityQuoteService;
+import ru.investbook.service.moex.MoexIssSecurityQuoteUpdateService;
 import ru.investbook.web.ControllerHelper;
 import ru.investbook.web.forms.model.PageableWrapperModel;
 import ru.investbook.web.forms.model.SecurityQuoteModel;
 import ru.investbook.web.forms.model.filter.SecurityQuoteFormFilterModel;
 import ru.investbook.web.forms.service.SecurityQuoteFormsService;
 
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 
 @Controller
 @RequestMapping("/security-quotes")
-@Slf4j
 @RequiredArgsConstructor
 public class SecurityQuoteController {
     private final SecurityQuoteFormsService securityQuoteFormsService;
-    private final MoexIssSecurityQuoteService moexIssSecurityQuoteService;
+    private final MoexIssSecurityQuoteUpdateService quoteUpdateService;
     private final SecurityRepository securityRepository;
-    private final SecurityQuoteRepository securityQuoteRepository;
     private volatile Collection<String> securities;
 
     @PostConstruct
@@ -109,20 +100,7 @@ public class SecurityQuoteController {
     }
 
     public String updateQuoteFromMoexIssApi() throws InterruptedException, ExecutionException {
-        long t0 = System.nanoTime();
-        try (ForkJoinPool pool = new ForkJoinPool(4 * Runtime.getRuntime().availableProcessors())) {
-            pool.submit(() -> securityRepository.findAll()
-                            .parallelStream()
-                            .forEach(moexIssSecurityQuoteService::updateQuote))
-                    .get();
-        }
-        String message = securityQuoteRepository.findFirstByOrderByTimestampDesc()
-                .map(SecurityQuoteEntity::getTimestamp)
-                .map(instant -> LocalDate.ofInstant(instant, ZoneId.systemDefault()))
-                .map(latestQuoteDate -> "Котировки обновлены по " + latestQuoteDate + " включительно")
-                .orElse("Запрос выполнен, но МосБиржа не вернула котировок");
-        log.info(message + " за " + Duration.ofNanos(System.nanoTime() - t0));
-        return message;
+        return quoteUpdateService.updateQuotes();
     }
 
     @GetMapping("/delete")

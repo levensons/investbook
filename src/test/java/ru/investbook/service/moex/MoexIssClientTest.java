@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.spacious_team.broker.pojo.SecurityQuote;
 import org.springframework.web.client.RestTemplate;
+import ru.investbook.report.ForeignExchangeRateService;
 
 import java.util.Optional;
 
@@ -37,12 +38,17 @@ public class MoexIssClientTest {
 
     @Mock
     MoexDerivativeCodeService moexDerivativeCodeService;
+    @Mock
+    ForeignExchangeRateService foreignExchangeRateService;
     RestTemplate restTemplate = new RestTemplate();
     MoexIssClientImpl moexIssClient;
 
     @BeforeEach
     public void setUp() {
-        moexIssClient = new MoexIssClientImpl(moexDerivativeCodeService, restTemplate);
+        moexIssClient = new MoexIssClientImpl(
+                moexDerivativeCodeService,
+                foreignExchangeRateService,
+                restTemplate);
     }
 
     @ParameterizedTest

@@ -53,10 +53,22 @@ public class AccountAnalysisChartController {
 
     @GetMapping
     public String getPage(Model model, HttpServletRequest request) {
+        Set<String> activeAccounts = getActiveAccounts(accountRepository);
+        LocalDate today = LocalDate.now();
         model.addAttribute("allAccounts", getAccounts(accountRepository));
-        model.addAttribute("activeAccounts", getActiveAccounts(accountRepository));
-        model.addAttribute("defaultFromDate", LocalDate.now().minusYears(1));
-        model.addAttribute("defaultToDate", LocalDate.now());
+        model.addAttribute("activeAccounts", activeAccounts);
+        model.addAttribute(
+                "defaultFromDate",
+                activeAccounts.isEmpty() ? today.minusYears(1) :
+                        accountRepository.findFirstReportTimestamp(activeAccounts)
+                                .map(timestamp -> timestamp.toLocalDate())
+                                .orElse(today.minusYears(1)));
+        model.addAttribute(
+                "defaultToDate",
+                activeAccounts.isEmpty() ? today :
+                        accountRepository.findLastReportTimestamp(activeAccounts)
+                                .map(timestamp -> timestamp.toLocalDate())
+                                .orElse(today));
         model.addAttribute("request", request);
         return "charts/account-analysis";
     }

@@ -60,6 +60,11 @@ public class ReportParserService {
             reportTables.getSecuritiesTable()
                     .getData()
                     .forEach(api::addSecurity);
+            if (reportTables instanceof SecurityPositionReportTables securityPositionTables) {
+                var positions = securityPositionTables.getSecurityPositionTable().getData();
+                log.debug("Из отчета получено {} остатков ценных бумаг", positions.size());
+                positions.forEach(api::addSecurityPosition);
+            }
             reportTables.getCashFlowTable()
                     .getData()
                     .forEach(api::addEventCashFlow);

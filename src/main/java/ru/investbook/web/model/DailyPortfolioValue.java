@@ -22,6 +22,6 @@ import java.time.LocalDate;
 
 public record DailyPortfolioValue(
         LocalDate date,
-        double assetsUsd,
+        double assetsRub,
         double assetsGrowth) {
 }

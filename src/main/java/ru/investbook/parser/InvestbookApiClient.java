@@ -47,6 +47,9 @@ import ru.investbook.api.SecurityQuoteRestController;
 import ru.investbook.api.SecurityRestController;
 import ru.investbook.api.TransactionCashFlowRestController;
 import ru.investbook.api.TransactionRestController;
+import ru.investbook.entity.SecurityPositionEntity;
+import ru.investbook.repository.SecurityPositionRepository;
+import ru.investbook.repository.SecurityRepository;
 import ru.investbook.service.moex.MoexDerivativeCodeService;
 
 import java.util.Optional;
@@ -72,6 +75,8 @@ public class InvestbookApiClient {
     private final SecurityQuoteRestController securityQuoteRestController;
     private final ForeignExchangeRateRestController foreignExchangeRateRestController;
     private final MoexDerivativeCodeService moexDerivativeCodeService;
+    private final SecurityPositionRepository securityPositionRepository;
+    private final SecurityRepository securityRepository;
     private final ValidatorService validator;
 
     public boolean addAccount(Account account) {
@@ -87,6 +92,18 @@ public class InvestbookApiClient {
                 security,
                 securityRestController::createIfAbsent,
                 "Не могу добавить ЦБ ");
+    }
+
+    public void addSecurityPosition(SecurityPosition position) {
+        SecurityPositionEntity entity = new SecurityPositionEntity();
+        entity.setAccount(position.account());
+        entity.setSecurity(securityRepository.getReferenceById(position.security()));
+        entity.setTimestamp(position.timestamp());
+        entity.setCount(position.count());
+        saveWithoutUpdate(
+                entity,
+                securityPositionRepository::save,
+                "Не могу добавить информацию об остатке финансового инструмента");
     }
 
     private Security convertDerivativeSecurityId(Security security) {

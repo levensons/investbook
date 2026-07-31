@@ -26,7 +26,9 @@ import org.spacious_team.broker.pojo.SecurityQuote.SecurityQuoteBuilder;
 import org.spacious_team.broker.pojo.SecurityType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import ru.investbook.report.ForeignExchangeRateService;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -88,11 +90,19 @@ public class MoexIssClientImpl implements MoexIssClient {
     private static final String quoteUri = "http://iss.moex.com/iss/engines/{engine}/markets/{market}/boards/{board}/securities/{secId}.json?" +
             "iss.meta=off&" +
             "iss.only=securities&" +
-            "securities.columns=SECID,PREVDATE,PREVADMITTEDQUOTE,PREVSETTLEPRICE,PREVPRICE,ACCRUEDINT,LOTSIZE,LOTVALUE,MINSTEP,STEPPRICE";
+            "securities.columns=SECID,PREVDATE,PREVADMITTEDQUOTE,PREVSETTLEPRICE,PREVPRICE,ACCRUEDINT,LOTSIZE,LOTVALUE,FACEUNIT,MINSTEP,STEPPRICE";
     private static final String quoteHistoryUri = "https://iss.moex.com/iss/history/engines/{engine}/markets/{market}/securities/{secId}.json?" +
             "iss.meta=off&" +
             "iss.only=history&" +
-            "history.columns=TRADEDATE,CLOSE,LEGALCLOSEPRICE,ADMITTEDQUOTE,FACEVALUE,ACCINT,CURRENCYID&" +
+            "history.columns=TRADEDATE,CLOSE,LEGALCLOSEPRICE,ADMITTEDQUOTE,FACEVALUE,FACEUNIT,ACCINT,CURRENCYID&" +
+            "from={from}&" +
+            "till={to}&" +
+            "start={start}&" +
+            "limit={limit}";
+    private static final String indexHistoryUri = "https://iss.moex.com/iss/history/engines/stock/markets/index/securities/{indexId}.json?" +
+            "iss.meta=off&" +
+            "iss.only=history&" +
+            "history.columns=TRADEDATE,CLOSE&" +
             "from={from}&" +
             "till={to}&" +
             "start={start}&" +
@@ -103,6 +113,7 @@ public class MoexIssClientImpl implements MoexIssClient {
     private static volatile int currentYear = getCurrentYear();
     private static volatile long fastCoarseDayCounter = getFastCoarseDayCounter();
     private final MoexDerivativeCodeService moexDerivativeCodeService;
+    private final ForeignExchangeRateService foreignExchangeRateService;
     private final RestTemplate restTemplate;
     private final Map<String, Optional<String>> optionCodeToShortNames = new ConcurrentHashMap<>();
     private final Map<String, Optional<String>> optionUnderlingFutures = new ConcurrentHashMap<>();
@@ -164,9 +175,9 @@ public class MoexIssClientImpl implements MoexIssClient {
                 .stream()
                 .flatMap(Collection::stream)
                 .findAny()
-                .flatMap(MoexSecurityQuoteHelper::parse)
-                .map(quoteBuilder -> quoteBuilder.currency(market.getCurrency()))
-                .map(SecurityQuoteBuilder::build);
+                .flatMap(description -> MoexSecurityQuoteHelper.parse(description)
+                        .map(SecurityQuoteBuilder::build)
+                        .map(parsed -> normalizePriceCurrency(parsed, description, market.getCurrency())));
         if (quote.isPresent()) {
             // Котировка опциона не содержит цену SecurityQuote.price,
             // т.к. ИСС МосБиржи, определяя MINSTEP, не сообщает STEPPRICE.
@@ -217,9 +228,10 @@ public class MoexIssClientImpl implements MoexIssClient {
                     .map(MoexJsonResponseParser::convertFromIntObjectMap)
                     .orElseGet(List::of);
             rows.stream()
-                    .map(row -> MoexSecurityQuoteHelper.parseHistory(row, market.getCurrency()))
+                    .map(row -> MoexSecurityQuoteHelper.parseHistory(row, market.getCurrency())
+                            .map(SecurityQuoteBuilder::build)
+                            .map(parsed -> normalizePriceCurrency(parsed, row, market.getCurrency())))
                     .flatMap(Optional::stream)
-                    .map(SecurityQuoteBuilder::build)
                     .forEach(result::add);
             if (rows.size() < HISTORY_PAGE_SIZE) {
                 break;
@@ -227,6 +239,58 @@ public class MoexIssClientImpl implements MoexIssClient {
             start += HISTORY_PAGE_SIZE;
         }
         return result;
+    }
+
+    private SecurityQuote normalizePriceCurrency(SecurityQuote quote,
+                                                 Map<String, Object> description,
+                                                 @Nullable String marketCurrency) {
+        return MoexSecurityQuoteHelper.normalizeBondPriceCurrency(
+                quote,
+                description,
+                marketCurrency,
+                (baseCurrency, quoteCurrency, date) -> foreignExchangeRateService
+                        .getExchangeRateOrDefault(baseCurrency, quoteCurrency, date));
+    }
+
+    @Override
+    public List<MoexIndexQuote> getIndexHistory(
+            String indexId,
+            LocalDate from,
+            LocalDate to) {
+        List<MoexIndexQuote> result = new ArrayList<>();
+        int start = 0;
+        while (true) {
+            Map<String, Object> variables = Map.of(
+                    "indexId", indexId,
+                    "from", from,
+                    "to", to,
+                    "start", start,
+                    "limit", HISTORY_PAGE_SIZE);
+            List<Map<String, Object>> rows = Optional
+                    .ofNullable(restTemplate.getForObject(indexHistoryUri, Map.class, variables))
+                    .map(MoexJsonResponseParser::convertFromIntObjectMap)
+                    .orElseGet(List::of);
+            rows.stream()
+                    .map(MoexIssClientImpl::parseIndexQuote)
+                    .flatMap(Optional::stream)
+                    .forEach(result::add);
+            if (rows.size() < HISTORY_PAGE_SIZE) {
+                break;
+            }
+            start += HISTORY_PAGE_SIZE;
+        }
+        return result;
+    }
+
+    static Optional<MoexIndexQuote> parseIndexQuote(Map<String, Object> row) {
+        try {
+            return Optional.of(new MoexIndexQuote(
+                    LocalDate.parse(String.valueOf(requireNonNull(row.get("TRADEDATE")))),
+                    new BigDecimal(String.valueOf(requireNonNull(row.get("CLOSE"))))));
+        } catch (Exception e) {
+            log.debug("Ответ истории MOEX ISS не содержит значения индекса: {}", row, e);
+            return Optional.empty();
+        }
     }
 
     public boolean isDerivativeAndExpired(@Nullable String shortnameOrSecid, SecurityType securityType) {

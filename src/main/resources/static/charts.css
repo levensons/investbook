@@ -73,3 +73,19 @@ body {
     width: 100%;
     height: 430px;
 }
+
+.cash-flow-legend {
+    display: flex;
+    justify-content: center;
+    gap: 1.5em;
+    margin-top: 0.35em;
+    font-size: 0.9em;
+}
+
+.cash-flow-deposit {
+    color: #2e7d32;
+}
+
+.cash-flow-withdrawal {
+    color: #c62828;
+}

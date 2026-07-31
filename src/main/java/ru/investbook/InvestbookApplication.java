@@ -23,12 +23,14 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.ApplicationContextException;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
 import ru.investbook.loadingpage.LoadingPageHttpServer;
 
 @SpringBootApplication
 @Component
 @EnableCaching
+@EnableScheduling
 @RequiredArgsConstructor
 public class InvestbookApplication  {
 

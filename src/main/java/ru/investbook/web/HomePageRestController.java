@@ -59,7 +59,7 @@ public class HomePageRestController {
         return AccountStats.builder()
                 .accounts(accounts)
                 .totalTransactions(transactionRepository.countByAccountIn(accounts))
-                .assetsValue(assetsAndCashService.getTotalAssetsInRub(accounts).orElse(null))
+                .assetsValue(assetsAndCashService.getTotalAssetsAtCurrentPricesInRub(accounts).orElse(null))
                 .cashBalance(assetsAndCashService.getTotalCashInRub(accounts).orElse(null))
                 .build();
     }

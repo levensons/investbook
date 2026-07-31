@@ -51,6 +51,15 @@ public interface EventCashFlowRepository extends
             Instant from,
             Instant to);
 
+    List<EventCashFlowEntity> findByTimestampBetweenOrderByTimestamp(
+            Instant from,
+            Instant to);
+
+    List<EventCashFlowEntity> findByAccountIdInAndTimestampBetweenOrderByTimestamp(
+            Collection<String> accounts,
+            Instant from,
+            Instant to);
+
     List<EventCashFlowEntity> findByAccountIdAndCashFlowTypeIdInAndTimestampBetweenOrderByTimestampDesc(
             String account,
             Collection<Integer> cashFlowType,
