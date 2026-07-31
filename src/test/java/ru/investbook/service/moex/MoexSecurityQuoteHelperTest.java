@@ -73,4 +73,28 @@ class MoexSecurityQuoteHelperTest {
                 "TRADEDATE", "2026-07-29",
                 "CURRENCYID", "SUR"), "RUB").isEmpty());
     }
+
+    @Test
+    void convertsForeignCurrencyBondCleanPriceToTradingCurrency() {
+        Map<String, Object> row = Map.of(
+                "TRADEDATE", "2026-07-30",
+                "LEGALCLOSEPRICE", 99.2341,
+                "FACEVALUE", 1000,
+                "FACEUNIT", "USD",
+                "ACCINT", 305.054886,
+                "CURRENCYID", "SUR");
+        SecurityQuote parsed = MoexSecurityQuoteHelper.parseHistory(row, "RUB")
+                .orElseThrow()
+                .build();
+
+        SecurityQuote normalized = MoexSecurityQuoteHelper.normalizeBondPriceCurrency(
+                parsed,
+                row,
+                "RUB",
+                (base, quote, date) -> new BigDecimal("80"));
+
+        assertEquals("RUB", normalized.getCurrency());
+        assertEquals(0, requireNonNull(normalized.getPrice()).compareTo(new BigDecimal("79387.28000")));
+        assertEquals(0, requireNonNull(normalized.getAccruedInterest()).compareTo(new BigDecimal("305.054886")));
+    }
 }

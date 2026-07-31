@@ -21,9 +21,11 @@ package ru.investbook.report;
 import org.spacious_team.broker.pojo.Account;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 
 import static java.util.Collections.singleton;
+import static java.time.ZoneId.systemDefault;
 
 public interface FifoPositionsFilter {
 
@@ -39,7 +41,7 @@ public interface FifoPositionsFilter {
 
     static FifoPositionsFilter of(String account) {
         Collection<String> accounts = singleton(account);
-        Instant toDate = Instant.now();
+        Instant toDate = currentDayEnd();
         return new FifoPositionsFilter() {
             public Collection<String> getAccounts() {
                 return accounts;
@@ -76,7 +78,7 @@ public interface FifoPositionsFilter {
     }
 
     static FifoPositionsFilter of(Collection<String> accounts) {
-        return of(accounts, ViewFilter.defaultFromDate, Instant.now());
+        return of(accounts, ViewFilter.defaultFromDate, currentDayEnd());
     }
 
     static FifoPositionsFilter of(Account account, Instant from, Instant to) {
@@ -104,5 +106,13 @@ public interface FifoPositionsFilter {
                 return to;
             }
         };
+    }
+
+    private static Instant currentDayEnd() {
+        return LocalDate.now()
+                .plusDays(1)
+                .atStartOfDay(systemDefault())
+                .toInstant()
+                .minusNanos(1);
     }
 }

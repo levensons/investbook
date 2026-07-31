@@ -32,11 +32,15 @@ import org.spacious_team.broker.report_parser.api.ReportTable;
 import org.spacious_team.broker.report_parser.api.SecurityTransaction;
 import org.spacious_team.broker.report_parser.api.WrappingReportTable;
 import ru.investbook.parser.SingleBrokerReport;
+import ru.investbook.parser.SecurityPosition;
+import ru.investbook.parser.SecurityPositionReportTables;
 
-public class VtbReportTables extends AbstractReportTables<SingleBrokerReport> {
+public class VtbReportTables extends AbstractReportTables<SingleBrokerReport>
+        implements SecurityPositionReportTables {
 
     @Getter
     private final ReportTable<Security> securitiesTable;
+    private final VtbSecuritiesTable accountSecuritiesTable;
     private final ReportTable<SecurityTransaction> securityTransactionTable;
     private final VtbCouponAmortizationRedemptionTable couponAmortizationRedemptionTable;
     private final CashFlowEventTable cashFlowEventTable;
@@ -44,6 +48,7 @@ public class VtbReportTables extends AbstractReportTables<SingleBrokerReport> {
     public VtbReportTables(SingleBrokerReport report) {
         super(report);
         VtbSecuritiesTable securitiesTable = new VtbSecuritiesTable(report);
+        this.accountSecuritiesTable = securitiesTable;
         VtbSecurityFlowTable securityFlowTable = new VtbSecurityFlowTable(report);
         VtbSecurityTransactionTable securityTransactionTable = new VtbSecurityTransactionTable(report);
         this.securitiesTable = WrappingReportTable.of(
@@ -98,6 +103,11 @@ public class VtbReportTables extends AbstractReportTables<SingleBrokerReport> {
     @Override
     public ReportTable<SecurityQuote> getSecurityQuoteTable() {
         return new VtbSecurityQuoteTable(report);
+    }
+
+    @Override
+    public ReportTable<SecurityPosition> getSecurityPositionTable() {
+        return WrappingReportTable.of(report, accountSecuritiesTable.getPositions());
     }
 
     @Override

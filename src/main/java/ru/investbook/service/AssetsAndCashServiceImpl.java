@@ -20,21 +20,23 @@ package ru.investbook.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spacious_team.broker.pojo.AccountCash;
 import org.spacious_team.broker.pojo.AccountPropertyType;
+import org.spacious_team.broker.pojo.Security;
 import org.spacious_team.broker.pojo.SecurityType;
 import org.springframework.stereotype.Service;
 import ru.investbook.converter.AccountCashConverter;
 import ru.investbook.converter.SecurityConverter;
 import ru.investbook.entity.AccountCashEntity;
 import ru.investbook.entity.AccountPropertyEntity;
+import ru.investbook.entity.SecurityPositionEntity;
 import ru.investbook.report.FifoPositionsFilter;
 import ru.investbook.report.ForeignExchangeRateService;
 import ru.investbook.repository.AccountCashRepository;
 import ru.investbook.repository.AccountPropertyRepository;
 import ru.investbook.repository.AccountRepository;
 import ru.investbook.repository.SecurityRepository;
+import ru.investbook.repository.SecurityPositionRepository;
 import ru.investbook.web.ControllerHelper;
 
 import java.math.BigDecimal;
@@ -44,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -59,12 +60,14 @@ import static ru.investbook.report.ForeignExchangeRateService.RUB;
 @RequiredArgsConstructor
 @Slf4j
 public class AssetsAndCashServiceImpl implements AssetsAndCashService {
-    private final Set<SecurityType> stockBondAndAssetTypes = Set.of(STOCK, BOND, ASSET);
+    private final Set<SecurityType> stockBondAndAssetTypes = Set.of(STOCK, BOND, STOCK_OR_BOND, ASSET);
     private final AccountPropertyRepository accountPropertyRepository;
     private final ForeignExchangeRateService foreignExchangeRateService;
     private final InvestmentProportionService investmentProportionService;
+    private final SecurityProfitService securityProfitService;
     private final AccountRepository accountRepository;
     private final SecurityRepository securityRepository;
+    private final SecurityPositionRepository securityPositionRepository;
     private final SecurityConverter securityConverter;
     private final AccountCashRepository accountCashRepository;
     private final AccountCashConverter accountCashConverter;
@@ -89,6 +92,21 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
     }
 
     @Override
+    public Optional<BigDecimal> getTotalAssetsAtCurrentPricesInRub(Collection<String> accounts) {
+        Collection<BigDecimal> accountAssets = accounts.stream()
+                .map(account -> getTotalAssetsByLatestBrokerPositionsInRub(account)
+                        .or(() -> getTotalAssetsByBrokerEstimationInRub(account))
+                        .or(() -> getTotalAssetsByCurrentOrLastTransactionQuoteEstimationInRub(account)))
+                .flatMap(Optional::stream)
+                .toList();
+        if (accountAssets.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(accountAssets.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    @Override
     public Optional<BigDecimal> getTotalAssetsInRub(String account) {
         return getTotalAssetsByBrokerEstimationInRub(account)
                 .or(() -> getTotalAssetsByCurrentOrLastTransactionQuoteEstimationInRub(account));
@@ -108,6 +126,55 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
                 .map(stream -> stream.map(e -> foreignExchangeRateService.convertValueToCurrency(
                                 parseTotalAssetsIfCan(e), getCurrency(e), RUB))
                         .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    private Optional<BigDecimal> getTotalAssetsByBrokerEstimationInRub(String account, Instant timestamp) {
+        List<AccountPropertyEntity> assets = accountPropertyRepository.findByAccountIdAndTimestampAndPropertyIn(
+                account,
+                timestamp,
+                List.of(AccountPropertyType.TOTAL_ASSETS_RUB.name(), AccountPropertyType.TOTAL_ASSETS_USD.name()));
+        if (assets.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(assets.stream()
+                .map(entity -> foreignExchangeRateService.convertValueToCurrency(
+                        parseTotalAssetsIfCan(entity), getCurrency(entity), RUB))
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    /**
+     * Starts with the broker's portfolio valuation and applies only the market-price movement since that report.
+     * This keeps the calculation correct when the imported transaction history does not contain opening positions.
+     */
+    private Optional<BigDecimal> getTotalAssetsByLatestBrokerPositionsInRub(String account) {
+        return securityPositionRepository.findFirstByAccountOrderByTimestampDesc(account)
+                .map(SecurityPositionEntity::getTimestamp)
+                .flatMap(timestamp -> getTotalAssetsByBrokerEstimationInRub(account, timestamp)
+                        .map(brokerAssets -> brokerAssets.add(getMarketValueChangeInRub(account, timestamp))));
+    }
+
+    private BigDecimal getMarketValueChangeInRub(String account, Instant positionTimestamp) {
+        Instant includePositionTimestamp = positionTimestamp.plusNanos(1);
+        return securityPositionRepository.findByAccountAndTimestamp(account, positionTimestamp)
+                .stream()
+                .filter(position -> position.getCount().signum() != 0)
+                .map(position -> {
+                    Security security = securityConverter.fromEntity(position.getSecurity());
+                    Optional<BigDecimal> reportPrice = getDirtyPriceInRub(security, includePositionTimestamp);
+                    Optional<BigDecimal> currentPrice = getDirtyPriceInRub(security, Instant.now());
+                    if (reportPrice.isEmpty() || currentPrice.isEmpty()) {
+                        return BigDecimal.ZERO;
+                    }
+                    return currentPrice.get()
+                            .subtract(reportPrice.get())
+                            .multiply(position.getCount());
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private Optional<BigDecimal> getDirtyPriceInRub(Security security, Instant at) {
+        return Optional.ofNullable(securityProfitService.getSecurityQuote(security, RUB, at))
+                .map(quote -> quote.getDirtyPriceInCurrency(security.getType() == DERIVATIVE));
     }
 
     private Optional<AccountPropertyEntity> getTotalAssets(String account, AccountPropertyType currency) {
@@ -135,19 +202,22 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
         try {
             long t0 = nanoTime();
             FifoPositionsFilter filter = FifoPositionsFilter.of(account);
-            @Nullable BigDecimal assetsInRub = securityRepository.findByTypeIn(stockBondAndAssetTypes)
+            List<BigDecimal> openedPositions = securityRepository.findByTypeIn(stockBondAndAssetTypes)
                     .stream()
                     .map(securityConverter::fromEntity)
                     .map(security -> investmentProportionService
                             .getOpenedPositionsCostByCurrentOrLastTransactionQuoteInRub(security, filter))
                     .flatMap(Optional::stream)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            assetsInRub = Objects.equals(assetsInRub, BigDecimal.ZERO) ? null : assetsInRub;
+                    .filter(value -> value.signum() != 0)
+                    .toList();
+            Optional<BigDecimal> cash = getTotalCashInRub(Set.of(account));
             log.debug("Оценена стоимость активов по котировкам за {}", Duration.ofNanos(nanoTime() - t0));
-            return Optional.ofNullable(assetsInRub)
-                    .map(openedPositionCost -> openedPositionCost.add(
-                            getTotalCashInRub(Set.of(account))
-                                    .orElse(BigDecimal.ZERO)));
+            if (openedPositions.isEmpty() && cash.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(openedPositions.stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .add(cash.orElse(BigDecimal.ZERO)));
         } catch (Exception e) {
             String message = "Ошибка оценки стоимости активов по котировкам";
             log.error(message, e);

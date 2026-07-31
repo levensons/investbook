@@ -29,7 +29,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
@@ -136,5 +138,45 @@ public class MoexSecurityQuoteHelper {
                 Double.parseDouble(
                         String.valueOf(
                                 requireNonNull(value, "Can't parse value to BigDecimal"))));
+    }
+
+    /**
+     * The clean price of a foreign-currency bond is expressed in the face-value currency, while accrued interest is
+     * expressed in the trading board currency. Convert the clean-price component before persisting a mixed quote.
+     */
+    static SecurityQuote normalizeBondPriceCurrency(SecurityQuote quote,
+                                                    Map<String, Object> description,
+                                                    @Nullable String marketCurrency,
+                                                    ExchangeRateProvider exchangeRateProvider) {
+        @Nullable String settlementCurrency = normalizeCurrency(ofNullable(description.get("CURRENCYID"))
+                .map(String::valueOf)
+                .orElse(marketCurrency));
+        @Nullable String faceCurrency = ofNullable(description.get("FACEUNIT"))
+                .map(String::valueOf)
+                .map(MoexSecurityQuoteHelper::normalizeCurrency)
+                .orElse(null);
+        @Nullable BigDecimal price = quote.getPrice();
+        if (price != null && faceCurrency != null && settlementCurrency != null
+                && !faceCurrency.equalsIgnoreCase(settlementCurrency)) {
+            LocalDate quoteDate = LocalDate.ofInstant(quote.getTimestamp(), ZoneId.systemDefault());
+            price = price.multiply(exchangeRateProvider.get(faceCurrency, settlementCurrency, quoteDate));
+        }
+        return quote.toBuilder()
+                .price(price)
+                .currency(settlementCurrency)
+                .build();
+    }
+
+    private static @Nullable String normalizeCurrency(@Nullable String currency) {
+        if (currency == null) {
+            return null;
+        }
+        String normalized = currency.toUpperCase(Locale.ROOT);
+        return Objects.equals(normalized, "SUR") || Objects.equals(normalized, "RUR") ? "RUB" : normalized;
+    }
+
+    @FunctionalInterface
+    interface ExchangeRateProvider {
+        BigDecimal get(String baseCurrency, String quoteCurrency, LocalDate date);
     }
 }

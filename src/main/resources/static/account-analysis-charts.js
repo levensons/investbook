@@ -17,6 +17,9 @@
  */
 
 const chartRoots = []
+const DAY_MS = 24 * 60 * 60 * 1000
+const DEPOSIT_COLOR = 0x2e7d32
+const WITHDRAWAL_COLOR = 0xc62828
 
 function disposeCharts() {
     while (chartRoots.length > 0) {
@@ -24,11 +27,108 @@ function disposeCharts() {
     }
 }
 
-function prepareData(points) {
-    return points.map(point => ({
+function toTimestamp(date) {
+    const [year, month, day] = date.split("-").map(Number)
+    return Date.UTC(year, month - 1, day)
+}
+
+function prepareData(points, fields) {
+    const source = points.map(point => ({
         ...point,
-        dateValue: new Date(point.date + "T00:00:00").getTime()
+        dateValue: toTimestamp(point.date)
     }))
+    const byTimestamp = new Map(source.map(point => [point.dateValue, point]))
+    const data = []
+    for (let timestamp = source[0].dateValue;
+         timestamp <= source[source.length - 1].dateValue;
+         timestamp += DAY_MS) {
+        data.push(byTimestamp.get(timestamp) || {
+            date: new Date(timestamp).toISOString().slice(0, 10),
+            dateValue: timestamp
+        })
+    }
+    for (const field of fields) {
+        interpolateField(data, field)
+    }
+    return data
+}
+
+function interpolateField(data, field) {
+    let previousIndex = -1
+    for (let index = 0; index < data.length; index++) {
+        if (!Number.isFinite(data[index][field])) {
+            continue
+        }
+        if (previousIndex >= 0 && index - previousIndex > 1) {
+            const previous = data[previousIndex]
+            const next = data[index]
+            const timeRange = next.dateValue - previous.dateValue
+            for (let missingIndex = previousIndex + 1; missingIndex < index; missingIndex++) {
+                const point = data[missingIndex]
+                const position = (point.dateValue - previous.dateValue) / timeRange
+                point[field] = previous[field] + (next[field] - previous[field]) * position
+                point[field + "Interpolated"] = true
+            }
+        }
+        previousIndex = index
+    }
+}
+
+function addCashFlowBullets(root, series) {
+    series.bullets.push((bulletRoot, _, dataItem) => {
+        const point = dataItem.dataContext
+        const cashFlow = point.externalCashFlowRub
+        if (!Number.isFinite(cashFlow) || cashFlow === 0) {
+            return
+        }
+        const isDeposit = cashFlow > 0
+        const color = am5.color(isDeposit ? DEPOSIT_COLOR : WITHDRAWAL_COLOR)
+        const marker = am5.Triangle.new(bulletRoot, {
+            width: 14,
+            height: 12,
+            rotation: isDeposit ? 0 : 180,
+            centerX: am5.percent(50),
+            centerY: am5.percent(50),
+            dy: isDeposit ? -9 : 9,
+            fill: color,
+            stroke: am5.color(0xffffff),
+            strokeWidth: 1.5,
+            tooltipText: (isDeposit ? "Пополнение: +" : "Снятие: ") +
+                "{externalCashFlowRub.formatNumber('#,###.00')} ₽"
+        })
+        marker.set("tooltip", am5.Tooltip.new(bulletRoot, {}))
+        return am5.Bullet.new(bulletRoot, {
+            sprite: marker
+        })
+    })
+}
+
+function formatTooltipDate(date) {
+    const [year, month, day] = date.split("-")
+    return day + "." + month + "." + year
+}
+
+function createCombinedTooltip(root, series, seriesDefinitions, numberFormat, valueSuffix) {
+    const tooltip = am5.Tooltip.new(root, {})
+    tooltip.label.adapters.add("text", () => {
+        const dataItem = series.get("tooltipDataItem")
+        const point = dataItem && dataItem.dataContext
+        if (!point) {
+            return ""
+        }
+        const lines = ["[bold]" + formatTooltipDate(point.date) + "[/]"]
+        for (const definition of seriesDefinitions) {
+            const value = point[definition.field]
+            if (Number.isFinite(value)) {
+                lines.push(
+                    definition.name + ": " +
+                    root.numberFormatter.format(value, numberFormat) +
+                    valueSuffix)
+            }
+        }
+        return lines.join("\n")
+    })
+    return tooltip
 }
 
 function createLineChart(elementId, data, seriesDefinitions, numberFormat, valueSuffix = "") {
@@ -44,8 +144,10 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
         panX: true,
         panY: false,
         wheelX: "panX",
-        wheelY: "none",
+        wheelY: "zoomX",
         pinchZoomX: true,
+        maxTooltipDistance: 0,
+        arrangeTooltips: true,
         layout: root.verticalLayout
     }))
 
@@ -62,6 +164,7 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
         renderer: am5xy.AxisRendererY.new(root, {})
     }))
 
+    const lineSeries = []
     for (const definition of seriesDefinitions) {
         const series = chart.series.push(am5xy.LineSeries.new(root, {
             name: definition.name,
@@ -70,12 +173,22 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
             valueXField: "dateValue",
             valueYField: definition.field,
             connect: true,
-            tooltip: am5.Tooltip.new(root, {
-                labelText: "{name}: {valueY.formatNumber('" + numberFormat + "')}" + valueSuffix
-            })
+            snapTooltip: true
         }))
+        series.set(
+            "tooltip",
+            createCombinedTooltip(
+                root,
+                series,
+                seriesDefinitions,
+                numberFormat,
+                valueSuffix))
         series.strokes.template.setAll({strokeWidth: 2})
-        series.data.setAll(data.filter(point => point[definition.field] !== null))
+        if (definition.cashFlowMarkers) {
+            addCashFlowBullets(root, series)
+        }
+        series.data.setAll(data)
+        lineSeries.push(series)
     }
 
     const legend = chart.children.push(am5.Legend.new(root, {
@@ -85,7 +198,9 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
     legend.data.setAll(chart.series.values)
 
     const cursor = chart.set("cursor", am5xy.XYCursor.new(root, {
-        xAxis: xAxis
+        xAxis: xAxis,
+        snapToSeries: lineSeries,
+        snapToSeriesBy: "x!"
     }))
     cursor.lineY.set("visible", false)
 
@@ -120,24 +235,26 @@ async function loadCharts() {
             return
         }
 
-        const data = prepareData(points)
-        createLineChart("assets-chart", data, [
-            {name: "Расчётная стоимость", field: "estimatedAssetsUsd"},
-            {name: "Оценка брокера", field: "assetsUsd"},
-            {name: "Чистые пополнения", field: "totalInvestmentUsd"}
-        ], "#,###.00")
-        createLineChart("growth-chart", data, [
-            {name: "Портфель (расчёт)", field: "estimatedAssetsGrowth"},
-            {name: "Портфель (оценки брокера)", field: "assetsGrowth"},
-            {name: "S&P 500", field: "sp500Growth"}
-        ], "#,###.00", "%")
-        createLineChart("cash-chart", data, [
-            {name: "Денежные средства", field: "totalCashUsd"}
-        ], "#,###.00")
-        const brokerPointCount = points.filter(point => point.assetsUsd !== null).length
-        const dailyPointCount = points.filter(point => point.estimatedAssetsUsd !== null).length
+        const assetsSeries = [
+            {name: "Расчётная стоимость", field: "estimatedAssetsRub", cashFlowMarkers: true},
+            {name: "Чистые пополнения", field: "totalInvestmentRub"}
+        ]
+        const growthSeries = [
+            {name: "Индекс портфеля", field: "estimatedAssetsGrowth"},
+            {name: "IMOEX", field: "imoexGrowth"},
+            {name: "MCFTRR", field: "mcftrrGrowth"}
+        ]
+        const allFields = [...assetsSeries, ...growthSeries]
+            .map(definition => definition.field)
+        const data = prepareData(points, allFields)
+        createLineChart("assets-chart", data, assetsSeries, "#,###.00")
+        createLineChart("growth-chart", data, growthSeries, "#,###.00", "%")
+        const dailyPointCount = points.filter(point => point.estimatedAssetsRub !== null).length
+        const imoexPointCount = points.filter(point => point.imoexGrowth !== null).length
+        const mcftrrPointCount = points.filter(point => point.mcftrrGrowth !== null).length
         status.textContent = "Расчётных точек: " + dailyPointCount +
-            "; оценок из брокерских отчётов: " + brokerPointCount
+            "; IMOEX: " + imoexPointCount +
+            "; MCFTRR: " + mcftrrPointCount
     } catch (error) {
         disposeCharts()
         status.textContent = "Не удалось построить графики: " + error.message

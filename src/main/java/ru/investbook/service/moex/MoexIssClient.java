@@ -42,6 +42,11 @@ public interface MoexIssClient {
             LocalDate from,
             LocalDate to);
 
+    List<MoexIndexQuote> getIndexHistory(
+            String indexId,
+            LocalDate from,
+            LocalDate to);
+
     /**
      * May be false negative (return false in case of no quotes on moex iss)
      *

@@ -22,9 +22,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.querydsl.ListQuerydslPredicateExecutor;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import ru.investbook.entity.AccountEntity;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Optional;
 import java.util.Set;
 
 @Transactional(readOnly = true)
@@ -33,6 +37,38 @@ public interface AccountRepository extends JpaRepository<AccountEntity, String>,
     Set<AccountEntity> findByEnabledIsTrue();
 
     Set<AccountEntity> findByEnabledIsFalse();
+
+    @Query(nativeQuery = true, value = """
+            SELECT MIN(event_timestamp)
+            FROM (
+                SELECT timestamp AS event_timestamp FROM transaction WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM event_cash_flow WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM security_event_cash_flow WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM account_cash WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM account_property WHERE account IN (:accounts)
+            ) AS report_events
+            """)
+    Optional<LocalDateTime> findFirstReportTimestamp(@Param("accounts") Collection<String> accounts);
+
+    @Query(nativeQuery = true, value = """
+            SELECT MAX(event_timestamp)
+            FROM (
+                SELECT timestamp AS event_timestamp FROM transaction WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM event_cash_flow WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM security_event_cash_flow WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM account_cash WHERE account IN (:accounts)
+                UNION ALL
+                SELECT timestamp FROM account_property WHERE account IN (:accounts)
+            ) AS report_events
+            """)
+    Optional<LocalDateTime> findLastReportTimestamp(@Param("accounts") Collection<String> accounts);
 
     @Transactional
     @Modifying

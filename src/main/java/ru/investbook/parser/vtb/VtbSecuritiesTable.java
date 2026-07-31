@@ -23,17 +23,24 @@ import lombok.RequiredArgsConstructor;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.spacious_team.broker.pojo.Security;
 import org.spacious_team.table_wrapper.api.PatternTableColumn;
+import org.spacious_team.table_wrapper.api.OptionalTableColumn;
 import org.spacious_team.table_wrapper.api.TableColumn;
 import org.spacious_team.table_wrapper.api.TableHeaderColumn;
 import org.spacious_team.table_wrapper.api.TableRow;
 import ru.investbook.parser.SingleAbstractReportTable;
 import ru.investbook.parser.SingleBrokerReport;
+import ru.investbook.parser.SecurityPosition;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 import static ru.investbook.parser.vtb.VtbSecuritiesTable.VtbSecuritiesTableHeader.NAME_REGNUMBER_ISIN;
+import static ru.investbook.parser.vtb.VtbSecuritiesTable.VtbSecuritiesTableHeader.OUTGOING;
+import static ru.investbook.parser.vtb.VtbSecuritiesTable.VtbSecuritiesTableHeader.PLANNED_OUTGOING;
 import static ru.investbook.parser.vtb.VtbSecuritiesTable.VtbSecuritiesTableHeader.SECTION;
 
 public class VtbSecuritiesTable extends SingleAbstractReportTable<Security> {
@@ -43,6 +50,7 @@ public class VtbSecuritiesTable extends SingleAbstractReportTable<Security> {
     static final String TABLE_FOOTER = "ИТОГО:";
     // security registration number -> Security
     private final Map<String, Security> regNumberToSecurity = new HashMap<>();
+    private final Collection<SecurityPosition> positions = new ArrayList<>();
 
     protected VtbSecuritiesTable(SingleBrokerReport report) {
         super(report,
@@ -64,6 +72,13 @@ public class VtbSecuritiesTable extends SingleAbstractReportTable<Security> {
         String isin = requireNonNull(security.getIsin());
         int securityId = getReport().getSecurityRegistrar().declareStockOrBondByIsin(isin, security::toBuilder);
         security = security.toBuilder().id(securityId).build();
+        BigDecimal outgoing = row.getBigDecimalCellValue(OUTGOING);
+        @Nullable BigDecimal plannedOutgoing = row.getBigDecimalCellValueOrDefault(PLANNED_OUTGOING, null);
+        positions.add(new SecurityPosition(
+                getReport().getAccount(),
+                securityId,
+                getReport().getReportEndDateTime(),
+                plannedOutgoing == null ? outgoing : plannedOutgoing));
         String registrationNumber = description.split(",")[1].toUpperCase().trim();
         regNumberToSecurity.put(registrationNumber, security);
         return security;
@@ -74,12 +89,18 @@ public class VtbSecuritiesTable extends SingleAbstractReportTable<Security> {
         return regNumberToSecurity;
     }
 
+    public Collection<SecurityPosition> getPositions() {
+        initializeIfNeed();
+        return positions;
+    }
+
     @Getter
     @RequiredArgsConstructor
     enum VtbSecuritiesTableHeader implements TableHeaderColumn {
         NAME_REGNUMBER_ISIN("наименование", "гос. регистрации", "isin"),
         SECTION("площадка"),
         OUTGOING("исходящий остаток"),
+        PLANNED_OUTGOING(OptionalTableColumn.of(PatternTableColumn.of("плановый исходящий остаток"))),
         CURRENCY("валюта\\s+цены", "номинала\\s+для\\s+облигаций"),
         QUOTE("цена", "для\\s+облигаций"),
         FACE_VALUE("номинал"),

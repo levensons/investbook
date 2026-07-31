@@ -43,6 +43,8 @@ public interface TransactionCashFlowRepository extends
 
     List<TransactionCashFlowEntity> findByTransactionId(int transactionId);
 
+    List<TransactionCashFlowEntity> findByTransactionIdIn(Collection<Integer> transactionIds);
+
     @Query(nativeQuery = true, value = """
             SELECT * FROM transaction_cash_flow
             WHERE transaction_id = :transactionId AND type = :#{#cashFlowType.id}

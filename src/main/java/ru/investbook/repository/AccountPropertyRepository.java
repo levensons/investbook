@@ -47,6 +47,11 @@ public interface AccountPropertyRepository extends
     Optional<AccountPropertyEntity> findFirstByAccountIdAndPropertyOrderByTimestampDesc(String account,
                                                                                         String property);
 
+    List<AccountPropertyEntity> findByAccountIdAndTimestampAndPropertyIn(
+            String account,
+            Instant timestamp,
+            Collection<String> properties);
+
     @Query(nativeQuery = true, value = """
             SELECT *
             FROM account_property AS t1
