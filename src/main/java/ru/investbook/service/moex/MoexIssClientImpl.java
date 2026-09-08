@@ -90,7 +90,12 @@ public class MoexIssClientImpl implements MoexIssClient {
     private static final String quoteUri = "http://iss.moex.com/iss/engines/{engine}/markets/{market}/boards/{board}/securities/{secId}.json?" +
             "iss.meta=off&" +
             "iss.only=securities&" +
-            "securities.columns=SECID,PREVDATE,PREVADMITTEDQUOTE,PREVSETTLEPRICE,PREVPRICE,ACCRUEDINT,LOTSIZE,LOTVALUE,FACEUNIT,MINSTEP,STEPPRICE";
+            "securities.columns=SECID,PREVDATE,PREVADMITTEDQUOTE,PREVSETTLEPRICE,PREVPRICE,ACCRUEDINT,LOTSIZE,LOTVALUE,FACEUNIT,CURRENCYID,MINSTEP,STEPPRICE";
+    private static final String currentQuoteUri = "https://iss.moex.com/iss/engines/{engine}/markets/{market}/boards/{board}/securities/{secId}.json?" +
+            "iss.meta=off&" +
+            "iss.only=securities,marketdata&" +
+            "securities.columns=SECID,ACCRUEDINT,LOTSIZE,LOTVALUE,FACEUNIT,CURRENCYID,MINSTEP,STEPPRICE&" +
+            "marketdata.columns=SECID,LAST,LCURRENTPRICE,MARKETPRICE,SYSTIME";
     private static final String quoteHistoryUri = "https://iss.moex.com/iss/history/engines/{engine}/markets/{market}/securities/{secId}.json?" +
             "iss.meta=off&" +
             "iss.only=history&" +
@@ -195,6 +200,32 @@ public class MoexIssClientImpl implements MoexIssClient {
                     .or(() -> quote); // не удалось вычислить, возвращаем без SecurityQuote.price
         }
         return quote;
+    }
+
+    @Override
+    public Optional<SecurityQuote> getCurrentQuote(String moexSecId, MoexMarketDescription market) {
+        Map<String, String> variables = new HashMap<>(market.toMap());
+        variables.put("secId", moexSecId);
+        @SuppressWarnings("rawtypes")
+        @Nullable Map response = restTemplate.getForObject(currentQuoteUri, Map.class, variables);
+        if (response == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> description = new HashMap<>();
+        getResponseSectionRows(response, "securities").stream().findAny().ifPresent(description::putAll);
+        getResponseSectionRows(response, "marketdata").stream().findAny().ifPresent(description::putAll);
+        return MoexSecurityQuoteHelper.parseCurrent(description)
+                .map(SecurityQuoteBuilder::build)
+                .map(parsed -> normalizePriceCurrency(parsed, description, market.getCurrency()));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static List<Map<String, Object>> getResponseSectionRows(Map response, String sectionName) {
+        @Nullable Object section = response.get(sectionName);
+        if (!(section instanceof Map)) {
+            return List.of();
+        }
+        return MoexJsonResponseParser.convertFromIntObjectMap(Map.of(sectionName, section));
     }
 
     @Override

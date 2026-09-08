@@ -36,6 +36,11 @@ public interface MoexIssClient {
 
     Optional<SecurityQuote> getQuote(String moexSecId, MoexMarketDescription market);
 
+    /**
+     * Returns the latest available quote from the dynamic MOEX market-data block.
+     */
+    Optional<SecurityQuote> getCurrentQuote(String moexSecId, MoexMarketDescription market);
+
     List<SecurityQuote> getQuoteHistory(
             String isinOrContractName,
             SecurityType securityType,

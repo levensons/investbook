@@ -32,15 +32,18 @@ function toTimestamp(date) {
     return Date.UTC(year, month - 1, day)
 }
 
-function prepareData(points, fields) {
+function prepareData(points, fields, fieldsToExtend = [], endDate = null) {
     const source = points.map(point => ({
         ...point,
         dateValue: toTimestamp(point.date)
     }))
     const byTimestamp = new Map(source.map(point => [point.dateValue, point]))
+    const lastSourceTimestamp = source[source.length - 1].dateValue
+    const endTimestamp = endDate === null ?
+        lastSourceTimestamp : Math.max(lastSourceTimestamp, toTimestamp(endDate))
     const data = []
     for (let timestamp = source[0].dateValue;
-         timestamp <= source[source.length - 1].dateValue;
+         timestamp <= endTimestamp;
          timestamp += DAY_MS) {
         data.push(byTimestamp.get(timestamp) || {
             date: new Date(timestamp).toISOString().slice(0, 10),
@@ -49,6 +52,9 @@ function prepareData(points, fields) {
     }
     for (const field of fields) {
         interpolateField(data, field)
+    }
+    for (const field of fieldsToExtend) {
+        extendFieldToEnd(data, field)
     }
     return data
 }
@@ -71,6 +77,17 @@ function interpolateField(data, field) {
             }
         }
         previousIndex = index
+    }
+}
+
+function extendFieldToEnd(data, field) {
+    let lastValue
+    for (const point of data) {
+        if (Number.isFinite(point[field])) {
+            lastValue = point[field]
+        } else if (Number.isFinite(lastValue)) {
+            point[field] = lastValue
+        }
     }
 }
 
@@ -246,7 +263,11 @@ async function loadCharts() {
         ]
         const allFields = [...assetsSeries, ...growthSeries]
             .map(definition => definition.field)
-        const data = prepareData(points, allFields)
+        const data = prepareData(
+            points,
+            allFields,
+            ["totalInvestmentRub"],
+            query.get("to"))
         createLineChart("assets-chart", data, assetsSeries, "#,###.00")
         createLineChart("growth-chart", data, growthSeries, "#,###.00", "%")
         const dailyPointCount = points.filter(point => point.estimatedAssetsRub !== null).length

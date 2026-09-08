@@ -28,6 +28,7 @@ import org.spacious_team.broker.pojo.SecurityQuote.SecurityQuoteBuilder;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Map;
@@ -92,6 +93,50 @@ public class MoexSecurityQuoteHelper {
             log.warn("Ответ Moex ISS не содержит сведений о котировке", e);
             return Optional.empty();
         }
+    }
+
+    static Optional<SecurityQuoteBuilder> parseCurrent(Map<String, Object> description) {
+        try {
+            BigDecimal quote = ofNullable(description.get("LAST"))
+                    .or(() -> ofNullable(description.get("LCURRENTPRICE")))
+                    .or(() -> ofNullable(description.get("MARKETPRICE")))
+                    .map(MoexSecurityQuoteHelper::toBigDecimal)
+                    .orElseThrow();
+            LocalDateTime timestamp = LocalDateTime.parse(
+                    String.valueOf(requireNonNull(description.get("SYSTIME"))),
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return Optional.of(createQuoteBuilder(
+                    description,
+                    quote,
+                    timestamp.atZone(ZoneId.systemDefault()).toInstant()));
+        } catch (Exception e) {
+            log.debug("Ответ текущих данных MOEX ISS не содержит котировки: {}", description, e);
+            return Optional.empty();
+        }
+    }
+
+    private static SecurityQuoteBuilder createQuoteBuilder(
+            Map<String, Object> description,
+            BigDecimal quote,
+            java.time.Instant timestamp) {
+        @Nullable BigDecimal accruedInterest = ofNullable(description.get("ACCRUEDINT"))
+                .map(MoexSecurityQuoteHelper::toBigDecimal)
+                .orElse(null);
+        @Nullable BigDecimal price = null;
+        if (accruedInterest != null) {
+            price = toBigDecimal(description.get("LOTVALUE"))
+                    .divide(toBigDecimal(description.get("LOTSIZE")), 4, RoundingMode.HALF_UP)
+                    .multiply(quote)
+                    .divide(HUNDRED, 2, RoundingMode.HALF_UP);
+        } else if (description.containsKey("STEPPRICE")) {
+            price = quote.multiply(toBigDecimal(description.get("STEPPRICE")))
+                    .divide(toBigDecimal(description.get("MINSTEP")), 2, RoundingMode.HALF_UP);
+        }
+        return SecurityQuote.builder()
+                .timestamp(timestamp)
+                .quote(quote)
+                .price(price)
+                .accruedInterest(accruedInterest);
     }
 
     static Optional<SecurityQuoteBuilder> parseHistory(

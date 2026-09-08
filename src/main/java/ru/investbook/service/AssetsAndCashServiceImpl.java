@@ -29,7 +29,6 @@ import ru.investbook.converter.AccountCashConverter;
 import ru.investbook.converter.SecurityConverter;
 import ru.investbook.entity.AccountCashEntity;
 import ru.investbook.entity.AccountPropertyEntity;
-import ru.investbook.entity.SecurityPositionEntity;
 import ru.investbook.report.FifoPositionsFilter;
 import ru.investbook.report.ForeignExchangeRateService;
 import ru.investbook.repository.AccountCashRepository;
@@ -64,7 +63,7 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
     private final AccountPropertyRepository accountPropertyRepository;
     private final ForeignExchangeRateService foreignExchangeRateService;
     private final InvestmentProportionService investmentProportionService;
-    private final SecurityProfitService securityProfitService;
+    private final CurrentSecurityPriceService currentSecurityPriceService;
     private final AccountRepository accountRepository;
     private final SecurityRepository securityRepository;
     private final SecurityPositionRepository securityPositionRepository;
@@ -94,7 +93,7 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
     @Override
     public Optional<BigDecimal> getTotalAssetsAtCurrentPricesInRub(Collection<String> accounts) {
         Collection<BigDecimal> accountAssets = accounts.stream()
-                .map(account -> getTotalAssetsByLatestBrokerPositionsInRub(account)
+                .map(account -> getTotalAssetsByLatestBrokerPositionsAtCurrentPricesInRub(account)
                         .or(() -> getTotalAssetsByBrokerEstimationInRub(account))
                         .or(() -> getTotalAssetsByCurrentOrLastTransactionQuoteEstimationInRub(account)))
                 .flatMap(Optional::stream)
@@ -128,53 +127,30 @@ public class AssetsAndCashServiceImpl implements AssetsAndCashService {
                         .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
-    private Optional<BigDecimal> getTotalAssetsByBrokerEstimationInRub(String account, Instant timestamp) {
-        List<AccountPropertyEntity> assets = accountPropertyRepository.findByAccountIdAndTimestampAndPropertyIn(
-                account,
-                timestamp,
-                List.of(AccountPropertyType.TOTAL_ASSETS_RUB.name(), AccountPropertyType.TOTAL_ASSETS_USD.name()));
-        if (assets.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(assets.stream()
-                .map(entity -> foreignExchangeRateService.convertValueToCurrency(
-                        parseTotalAssetsIfCan(entity), getCurrency(entity), RUB))
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
     /**
-     * Starts with the broker's portfolio valuation and applies only the market-price movement since that report.
-     * This keeps the calculation correct when the imported transaction history does not contain opening positions.
+     * Values the actual security balances from the latest broker report at the latest available market prices.
      */
-    private Optional<BigDecimal> getTotalAssetsByLatestBrokerPositionsInRub(String account) {
+    private Optional<BigDecimal> getTotalAssetsByLatestBrokerPositionsAtCurrentPricesInRub(String account) {
         return securityPositionRepository.findFirstByAccountOrderByTimestampDesc(account)
-                .map(SecurityPositionEntity::getTimestamp)
-                .flatMap(timestamp -> getTotalAssetsByBrokerEstimationInRub(account, timestamp)
-                        .map(brokerAssets -> brokerAssets.add(getMarketValueChangeInRub(account, timestamp))));
-    }
-
-    private BigDecimal getMarketValueChangeInRub(String account, Instant positionTimestamp) {
-        Instant includePositionTimestamp = positionTimestamp.plusNanos(1);
-        return securityPositionRepository.findByAccountAndTimestamp(account, positionTimestamp)
-                .stream()
-                .filter(position -> position.getCount().signum() != 0)
-                .map(position -> {
-                    Security security = securityConverter.fromEntity(position.getSecurity());
-                    Optional<BigDecimal> reportPrice = getDirtyPriceInRub(security, includePositionTimestamp);
-                    Optional<BigDecimal> currentPrice = getDirtyPriceInRub(security, Instant.now());
-                    if (reportPrice.isEmpty() || currentPrice.isEmpty()) {
-                        return BigDecimal.ZERO;
+                .map(position -> position.getTimestamp())
+                .flatMap(timestamp -> {
+                    List<Optional<BigDecimal>> positionValues = securityPositionRepository
+                            .findByAccountAndTimestamp(account, timestamp)
+                            .stream()
+                            .filter(position -> position.getCount().signum() != 0)
+                            .map(position -> currentSecurityPriceService
+                                    .getDirtyPriceInRub(securityConverter.fromEntity(position.getSecurity()))
+                                    .map(price -> price.multiply(position.getCount())))
+                            .toList();
+                    if (positionValues.stream().anyMatch(Optional::isEmpty)) {
+                        return Optional.empty();
                     }
-                    return currentPrice.get()
-                            .subtract(reportPrice.get())
-                            .multiply(position.getCount());
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private Optional<BigDecimal> getDirtyPriceInRub(Security security, Instant at) {
-        return Optional.ofNullable(securityProfitService.getSecurityQuote(security, RUB, at))
-                .map(quote -> quote.getDirtyPriceInCurrency(security.getType() == DERIVATIVE));
+                    BigDecimal securitiesValue = positionValues.stream()
+                            .flatMap(Optional::stream)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal cash = getTotalCashInRub(Set.of(account)).orElse(BigDecimal.ZERO);
+                    return Optional.of(securitiesValue.add(cash));
+                });
     }
 
     private Optional<AccountPropertyEntity> getTotalAssets(String account, AccountPropertyType currency) {

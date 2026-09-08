@@ -41,9 +41,16 @@ async function refreshPortfolioStats() {
             "/account-properties" :
             "/account-properties/edit-form/total-assets"
         cash.textContent = formatRubles(stats["cash-balance"], "---")
-        status.textContent = "Значение проверено в " +
-            new Date().toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"}) +
-            "; биржевые котировки загружаются каждый час"
+        const quotesUpdatedAt = stats["quotes-updated-at"]
+        status.textContent = quotesUpdatedAt ?
+            "Текущие биржевые котировки по состоянию на " +
+                new Date(quotesUpdatedAt).toLocaleString("ru-RU", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                }) :
+            "Используются последние доступные котировки; live-обновление выполняется каждый час"
     } catch (error) {
         status.textContent = "Не удалось обновить стоимость: " + error.message
     }

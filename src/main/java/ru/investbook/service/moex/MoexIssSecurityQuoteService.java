@@ -27,7 +27,10 @@ import ru.investbook.converter.SecurityQuoteConverter;
 import ru.investbook.entity.SecurityEntity;
 import ru.investbook.repository.SecurityQuoteRepository;
 
+import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.spacious_team.broker.pojo.SecurityType.ASSET;
 import static org.spacious_team.broker.pojo.SecurityType.CURRENCY_PAIR;
@@ -41,6 +44,7 @@ public class MoexIssSecurityQuoteService {
     private final MoexIssClient moexClient;
     private final SecurityQuoteConverter securityQuoteConverter;
     private final SecurityQuoteRepository securityQuoteRepository;
+    private final Map<Integer, SecurityQuote> currentQuotes = new ConcurrentHashMap<>();
 
     public void updateQuote(SecurityEntity security) {
         try {
@@ -57,18 +61,32 @@ public class MoexIssSecurityQuoteService {
                     .or(() -> Optional.ofNullable(security.getTicker()))
                     .orElseThrow();
             moexClient.getSecId(isinOrContractName, securityType)
-                    .flatMap(this::getSecurityQuote)
+                    .flatMap(secId -> moexClient.getMarket(secId)
+                            .map(market -> new QuoteRequest(secId, market)))
                     .ifPresentOrElse(
-                            quote -> saveQuote(securityId, quote),
+                            request -> updateQuotes(securityId, request),
                             () -> log.debug("Котировка не обновлена. На сайте МосБиржи отсутствует котировка {}", securityId));
         } catch (Exception e) {
             log.debug("Котировка не обновлена для {}", security, e);
         }
     }
 
-    private Optional<SecurityQuote> getSecurityQuote(String moexSecId) {
-        return moexClient.getMarket(moexSecId)
-                .flatMap(market -> moexClient.getQuote(moexSecId, market));
+    private void updateQuotes(Integer securityId, QuoteRequest request) {
+        moexClient.getQuote(request.secId(), request.market())
+                .ifPresent(quote -> saveQuote(securityId, quote));
+        moexClient.getCurrentQuote(request.secId(), request.market())
+                .map(quote -> quote.toBuilder().security(securityId).build())
+                .ifPresent(quote -> currentQuotes.put(securityId, quote));
+    }
+
+    public Optional<SecurityQuote> getCurrentQuote(Integer securityId) {
+        return Optional.ofNullable(currentQuotes.get(securityId));
+    }
+
+    public Optional<Instant> getLastCurrentQuoteTimestamp() {
+        return currentQuotes.values().stream()
+                .map(SecurityQuote::getTimestamp)
+                .max(Instant::compareTo);
     }
 
     private void saveQuote(Integer securityId, SecurityQuote quote) {
@@ -85,5 +103,8 @@ public class MoexIssSecurityQuoteService {
                 log.warn("Не могу добавить информацию о котировке финансового инструмента {}", securityId, e);
             }
         }
+    }
+
+    private record QuoteRequest(String secId, MoexMarketDescription market) {
     }
 }

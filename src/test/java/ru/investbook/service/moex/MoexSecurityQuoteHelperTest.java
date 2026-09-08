@@ -23,6 +23,7 @@ import org.spacious_team.broker.pojo.SecurityQuote;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Map;
 
@@ -32,6 +33,37 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static java.util.Objects.requireNonNull;
 
 class MoexSecurityQuoteHelperTest {
+
+    @Test
+    void parsesCurrentStockQuote() {
+        SecurityQuote quote = MoexSecurityQuoteHelper.parseCurrent(Map.of(
+                        "LAST", 282.35,
+                        "LCURRENTPRICE", 282.12,
+                        "SYSTIME", "2026-08-04 11:36:15"))
+                .orElseThrow()
+                .build();
+
+        assertEquals(0, quote.getQuote().compareTo(new BigDecimal("282.35")));
+        assertEquals(
+                LocalDateTime.of(2026, 8, 4, 11, 36, 15),
+                LocalDateTime.ofInstant(quote.getTimestamp(), ZoneId.systemDefault()));
+    }
+
+    @Test
+    void parsesCurrentBondQuote() {
+        SecurityQuote quote = MoexSecurityQuoteHelper.parseCurrent(Map.of(
+                        "LAST", 100.255,
+                        "SYSTIME", "2026-08-04 11:36:24",
+                        "ACCRUEDINT", 340.291975,
+                        "LOTVALUE", 1000,
+                        "LOTSIZE", 1))
+                .orElseThrow()
+                .build();
+
+        assertEquals(0, quote.getQuote().compareTo(new BigDecimal("100.255")));
+        assertEquals(0, requireNonNull(quote.getPrice()).compareTo(new BigDecimal("1002.55")));
+        assertEquals(0, requireNonNull(quote.getAccruedInterest()).compareTo(new BigDecimal("340.291975")));
+    }
 
     @Test
     void parsesStockHistory() {

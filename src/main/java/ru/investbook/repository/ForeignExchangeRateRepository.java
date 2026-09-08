@@ -40,6 +40,10 @@ public interface ForeignExchangeRateRepository extends
 
     Optional<ForeignExchangeRateEntity> findByPkCurrencyPairAndPkDate(String currencyPair, LocalDate atDate);
 
+    Optional<ForeignExchangeRateEntity> findFirstByPkCurrencyPairAndPkDateLessThanEqualOrderByPkDateDesc(
+            String currencyPair,
+            LocalDate atDate);
+
     Optional<ForeignExchangeRateEntity> findFirstByPkCurrencyPairOrderByPkDateDesc(String currencyPair);
 
     List<ForeignExchangeRateEntity> findByPkCurrencyPairOrderByPkDateDesc(String currencyPair);

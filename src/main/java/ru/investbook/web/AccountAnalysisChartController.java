@@ -63,12 +63,7 @@ public class AccountAnalysisChartController {
                         accountRepository.findFirstReportTimestamp(activeAccounts)
                                 .map(timestamp -> timestamp.toLocalDate())
                                 .orElse(today.minusYears(1)));
-        model.addAttribute(
-                "defaultToDate",
-                activeAccounts.isEmpty() ? today :
-                        accountRepository.findLastReportTimestamp(activeAccounts)
-                                .map(timestamp -> timestamp.toLocalDate())
-                                .orElse(today));
+        model.addAttribute("defaultToDate", today);
         model.addAttribute("request", request);
         return "charts/account-analysis";
     }

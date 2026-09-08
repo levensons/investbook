@@ -35,8 +35,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.investbook.repository.TransactionRepository;
 import ru.investbook.service.AssetsAndCashService;
+import ru.investbook.service.moex.MoexIssSecurityQuoteService;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,6 +50,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class HomePageRestController {
     private final AssetsAndCashService assetsAndCashService;
     private final TransactionRepository transactionRepository;
+    private final MoexIssSecurityQuoteService moexQuoteService;
 
     @GetMapping("/accounts/all/stats")
     @Tag(name = "Accounts")
@@ -61,6 +64,7 @@ public class HomePageRestController {
                 .totalTransactions(transactionRepository.countByAccountIn(accounts))
                 .assetsValue(assetsAndCashService.getTotalAssetsAtCurrentPricesInRub(accounts).orElse(null))
                 .cashBalance(assetsAndCashService.getTotalCashInRub(accounts).orElse(null))
+                .quotesUpdatedAt(moexQuoteService.getLastCurrentQuoteTimestamp().orElse(null))
                 .build();
     }
 
@@ -93,5 +97,8 @@ public class HomePageRestController {
 
         @JsonProperty("cash-balance")
         private final @Nullable BigDecimal cashBalance;
+
+        @JsonProperty("quotes-updated-at")
+        private final @Nullable Instant quotesUpdatedAt;
     }
 }

@@ -25,6 +25,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import ru.investbook.service.AssetsAndCashService;
 import ru.investbook.service.InvestmentProportionService;
 
@@ -46,17 +47,7 @@ public class AccountCompositionController {
     @GetMapping("/sectors-pie-chart")
     public String getSectorsProportionPage(Model model, HttpServletRequest request) {
         try {
-            Set<String> accounts = assetsAndCashService.getActiveAccounts();
-            Collection<Map<String, ?>> sectorsProportion = investmentProportionService.getSectorsProportion(accounts)
-                    .entrySet()
-                    .stream()
-                    .map(e -> Map.of("sector", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
-                    .collect(toList());
-            int cash = assetsAndCashService.getTotalCashInRub(accounts)
-                    .map(Number::intValue)
-                    .orElse(0);
-            sectorsProportion.add(Map.of("sector", "Кеш", "investment", cash));
-            model.addAttribute("sectorsProportion", sectorsProportion);
+            model.addAttribute("sectorsProportion", getSectorsProportion());
             model.addAttribute("request", request);
             return "charts/sectors-pie-chart";
         } catch (Exception e) {
@@ -68,20 +59,26 @@ public class AccountCompositionController {
         }
     }
 
+    @GetMapping("/sectors-pie-chart/data")
+    @ResponseBody
+    public Collection<Map<String, ?>> getSectorsProportion() {
+        Set<String> accounts = assetsAndCashService.getActiveAccounts();
+        Collection<Map<String, ?>> result = investmentProportionService.getSectorsProportion(accounts)
+                .entrySet()
+                .stream()
+                .map(e -> Map.of("sector", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
+                .collect(toList());
+        int cash = assetsAndCashService.getTotalCashInRub(accounts)
+                .map(Number::intValue)
+                .orElse(0);
+        result.add(Map.of("sector", "Кеш", "investment", cash));
+        return result;
+    }
+
     @GetMapping("/securities-pie-chart")
     public String getSecuritiesProportionPage(Model model, HttpServletRequest request) {
         try {
-            Set<String> accounts = assetsAndCashService.getActiveAccounts();
-            Collection<Map<String, ?>> securitiesProportion = investmentProportionService.getSecuritiesProportion(accounts)
-                    .entrySet()
-                    .stream()
-                    .map(e -> Map.of("security", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
-                    .collect(toList());
-            int cash = assetsAndCashService.getTotalCashInRub(accounts)
-                    .map(Number::intValue)
-                    .orElse(0);
-            securitiesProportion.add(Map.of("security", "Кеш", "investment", cash));
-            model.addAttribute("securitiesProportion", securitiesProportion);
+            model.addAttribute("securitiesProportion", getSecuritiesProportion());
             model.addAttribute("request", request);
             return "charts/securities-pie-chart";
         } catch (Exception e) {
@@ -91,5 +88,21 @@ public class AccountCompositionController {
                             ". Полное описание ошибки доступно в файле лога, обратитесь в техническую поддержку.");
             return "success";
         }
+    }
+
+    @GetMapping("/securities-pie-chart/data")
+    @ResponseBody
+    public Collection<Map<String, ?>> getSecuritiesProportion() {
+        Set<String> accounts = assetsAndCashService.getActiveAccounts();
+        Collection<Map<String, ?>> result = investmentProportionService.getSecuritiesProportion(accounts)
+                .entrySet()
+                .stream()
+                .map(e -> Map.of("security", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
+                .collect(toList());
+        int cash = assetsAndCashService.getTotalCashInRub(accounts)
+                .map(Number::intValue)
+                .orElse(0);
+        result.add(Map.of("security", "Кеш", "investment", cash));
+        return result;
     }
 }

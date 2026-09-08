@@ -25,13 +25,19 @@ import org.spacious_team.broker.pojo.SecurityType;
 import org.springframework.stereotype.Service;
 import ru.investbook.converter.SecurityConverter;
 import ru.investbook.entity.SecurityDescriptionEntity;
+import ru.investbook.entity.SecurityPositionEntity;
 import ru.investbook.report.FifoPositionsFactory;
 import ru.investbook.report.FifoPositionsFilter;
 import ru.investbook.repository.SecurityDescriptionRepository;
+import ru.investbook.repository.SecurityPositionRepository;
 import ru.investbook.repository.SecurityRepository;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +48,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.*;
 import static org.spacious_team.broker.pojo.SecurityType.*;
-import static ru.investbook.report.ForeignExchangeRateService.RUB;
 
 @Service
 @RequiredArgsConstructor
@@ -54,7 +59,8 @@ public class InvestmentProportionService {
     private final SecurityConverter securityConverter;
     private final SecurityDescriptionRepository securityDescriptionRepository;
     private final FifoPositionsFactory fifoPositionsFactory;
-    private final SecurityProfitService securityProfitService;
+    private final SecurityPositionRepository securityPositionRepository;
+    private final CurrentSecurityPriceService currentSecurityPriceService;
 
     /**
      * Sector name -> value in rub
@@ -62,8 +68,7 @@ public class InvestmentProportionService {
     public Map<String, Float> getSectorsProportion(Set<String> accounts) {
         try {
             long t0 = nanoTime();
-            FifoPositionsFilter filter = FifoPositionsFilter.of(accounts);
-            Map<String, Float> result = getSecurityInvestmentStream(filter)
+            Map<String, Float> result = getSecurityInvestmentStream(accounts)
                     .collect(groupingBy(this::getEconomicSector,
                             mapping(SecurityInvestment::getInvestment, reducing(0f, Float::sum))));
             log.info("Рассчитаны объемы инвестиций в сектора экономики за {}", Duration.ofNanos(nanoTime() - t0));
@@ -81,9 +86,11 @@ public class InvestmentProportionService {
     public Map<String, Float> getSecuritiesProportion(Set<String> accounts) {
         try {
             long t0 = nanoTime();
-            FifoPositionsFilter filter = FifoPositionsFilter.of(accounts);
-            Map<String, Float> result = getSecurityInvestmentStream(filter)
-                    .collect(toMap(this::getSecurityDescription, SecurityInvestment::getInvestment));
+            Map<String, Float> result = getSecurityInvestmentStream(accounts)
+                    .collect(toMap(
+                            this::getSecurityDescription,
+                            SecurityInvestment::getInvestment,
+                            Float::sum));
             log.info("Рассчитаны объемы инвестиций в бумаги за {}", Duration.ofNanos(nanoTime() - t0));
             return result;
         } catch (Exception e) {
@@ -93,13 +100,48 @@ public class InvestmentProportionService {
         }
     }
 
-    private Stream<SecurityInvestment> getSecurityInvestmentStream(FifoPositionsFilter filter) {
+    private Stream<SecurityInvestment> getSecurityInvestmentStream(Set<String> accounts) {
+        List<SecurityInvestment> reportedInvestments = new ArrayList<>();
+        Set<String> accountsWithoutReportedPositions = new HashSet<>(accounts);
+        Map<Integer, ReportedPosition> reportedPositions = new HashMap<>();
+        for (String account : accounts) {
+            securityPositionRepository.findFirstByAccountOrderByTimestampDesc(account)
+                    .map(SecurityPositionEntity::getTimestamp)
+                    .ifPresent(timestamp -> {
+                        accountsWithoutReportedPositions.remove(account);
+                        securityPositionRepository.findByAccountAndTimestamp(account, timestamp)
+                                .forEach(position -> addReportedPosition(reportedPositions, position));
+                    });
+        }
+        reportedPositions.values().stream()
+                .map(position -> getCurrentAmount(position.security(), position.count()))
+                .flatMap(Optional::stream)
+                .forEach(reportedInvestments::add);
+
+        Stream<SecurityInvestment> transactionInvestments = accountsWithoutReportedPositions.isEmpty() ?
+                Stream.empty() :
+                getTransactionInvestmentStream(FifoPositionsFilter.of(accountsWithoutReportedPositions));
+        return Stream.concat(reportedInvestments.stream(), transactionInvestments)
+                .filter(v -> v.investment().floatValue() > 1);
+    }
+
+    private void addReportedPosition(
+            Map<Integer, ReportedPosition> reportedPositions,
+            SecurityPositionEntity position) {
+        Security security = securityConverter.fromEntity(position.getSecurity());
+        Integer securityId = requireNonNull(security.getId());
+        reportedPositions.merge(
+                securityId,
+                new ReportedPosition(security, position.getCount()),
+                (left, right) -> new ReportedPosition(left.security(), left.count().add(right.count())));
+    }
+
+    private Stream<SecurityInvestment> getTransactionInvestmentStream(FifoPositionsFilter filter) {
         return securityRepository.findByTypeIn(stockAndBondTypes)
                 .stream()
                 .map(securityConverter::fromEntity)
                 .map(security -> getCurrentAmount(security, filter))
-                .flatMap(Optional::stream)
-                .filter(v -> v.investment().floatValue() > 1);
+                .flatMap(Optional::stream);
     }
 
     private Optional<SecurityInvestment> getCurrentAmount(Security security, FifoPositionsFilter filter) {
@@ -107,11 +149,17 @@ public class InvestmentProportionService {
                 .map(investmentRub -> new SecurityInvestment(security, investmentRub));
     }
 
+    private Optional<SecurityInvestment> getCurrentAmount(Security security, BigDecimal count) {
+        if (count.signum() == 0) {
+            return Optional.empty();
+        }
+        return currentSecurityPriceService.getDirtyPriceInRub(security)
+                .map(price -> new SecurityInvestment(security, price.multiply(count)));
+    }
+
     public Optional<BigDecimal> getOpenedPositionsCostByCurrentOrLastTransactionQuoteInRub(Security security,
                                                                                            FifoPositionsFilter filter) {
-        return ofNullable(securityProfitService.getSecurityQuote(security, RUB, filter.getToDate()))
-                .map(quote -> quote.getDirtyPriceInCurrency(security.getType() == SecurityType.DERIVATIVE))
-                .or(() -> securityProfitService.getSecurityQuoteFromLastTransaction(security, RUB))
+        return currentSecurityPriceService.getDirtyPriceInRub(security)
                 .map(quote -> quote.multiply(
                         BigDecimal.valueOf(
                                 fifoPositionsFactory.get(security, filter)
@@ -136,5 +184,8 @@ public class InvestmentProportionService {
         private float getInvestment() {
             return investment == null ? 0 : investment.floatValue();
         }
+    }
+
+    private record ReportedPosition(Security security, BigDecimal count) {
     }
 }

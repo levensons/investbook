@@ -60,6 +60,20 @@
         pieSeries.hiddenState.properties.endAngle = -90;
         pieSeries.hiddenState.properties.startAngle = -90;
 
+        async function refreshComposition() {
+            const response = await fetch("/charts/sectors-pie-chart/data", {cache: "no-store"});
+            if (response.ok) {
+                chart.data = await response.json();
+            }
+        }
+
+        setInterval(refreshComposition, 5 * 60 * 1000);
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) {
+                refreshComposition();
+            }
+        });
+
     }); // end am4core.ready()
 </script>
 

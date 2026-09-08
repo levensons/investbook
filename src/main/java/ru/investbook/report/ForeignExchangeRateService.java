@@ -190,7 +190,9 @@ public class ForeignExchangeRateService {
             return BigDecimal.ONE;
         }
         BigDecimal exchangeRate = foreignExchangeRateRepository
-                .findByPkCurrencyPairAndPkDate(currency.toUpperCase() + "RUB", atDate)
+                .findFirstByPkCurrencyPairAndPkDateLessThanEqualOrderByPkDateDesc(
+                        currency.toUpperCase() + "RUB",
+                        atDate)
                 .map(ForeignExchangeRateEntity::getRate)
                 .orElse(BigDecimal.ZERO);
 
