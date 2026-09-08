@@ -1,4 +1,5 @@
 target/
+/.local/
 .mvn
 !.mvn/wrapper/maven-wrapper.properties
 !**/src/main/**
