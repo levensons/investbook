@@ -32,6 +32,7 @@ import ru.investbook.repository.ForeignExchangeRateRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -140,6 +141,8 @@ public class ForeignExchangeRateService {
      * @throws NoSuchElementException если обменный курс не известен
      */
     public BigDecimal getExchangeRate(String baseCurrency, String quoteCurrency, LocalDate atDate) {
+        baseCurrency = normalizeCurrency(baseCurrency);
+        quoteCurrency = normalizeCurrency(quoteCurrency);
         if (baseCurrency.equalsIgnoreCase(quoteCurrency)) {
             return BigDecimal.ONE;
         }
@@ -186,11 +189,12 @@ public class ForeignExchangeRateService {
      * @throws NoSuchElementException если обменный курс не известен
      */
     public BigDecimal getExchangeRateToRub(String currency, LocalDate atDate) {
+        currency = normalizeCurrency(currency);
         if (currency.equalsIgnoreCase("rub")) {
             return BigDecimal.ONE;
         }
         BigDecimal exchangeRate = foreignExchangeRateRepository
-                .findByPkCurrencyPairAndPkDate(currency.toUpperCase() + "RUB", atDate)
+                .findFirstByPkCurrencyPairAndPkDateLessThanEqualOrderByPkDateDesc(currency + "RUB", atDate)
                 .map(ForeignExchangeRateEntity::getRate)
                 .orElse(BigDecimal.ZERO);
 
@@ -205,6 +209,7 @@ public class ForeignExchangeRateService {
 
     public void invalidateCache() {
         this.cache.clear();
+        this.cacheByDate.clear();
     }
 
     private void cache(String baseCurrency, String quoteCurrency, BigDecimal exchangeRate) {
@@ -258,6 +263,21 @@ public class ForeignExchangeRateService {
             BigDecimal exchangeRate = getExchangeRate(fromCurrency, toCurrency);
             return value.multiply(exchangeRate);
         }
+    }
+
+    /**
+     * Converts a historical amount using the last rate effective on or before its valuation/payment date.
+     * Missing history is an error: neither the latest rate nor an estimated rate is substituted.
+     */
+    public BigDecimal convertValueToCurrency(BigDecimal value, String fromCurrency, String toCurrency, LocalDate atDate) {
+        return value.signum() == 0 ? value : value.multiply(getExchangeRate(fromCurrency, toCurrency, atDate));
+    }
+
+    private static String normalizeCurrency(String currency) {
+        return switch (currency.toUpperCase(Locale.ROOT)) {
+            case "RUR", "SUR" -> RUB;
+            default -> currency.toUpperCase(Locale.ROOT);
+        };
     }
 
     /**
