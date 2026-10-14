@@ -22,7 +22,7 @@
     <meta charset="utf-8">
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
-    <style>
+    <style data-turbo-track="dynamic">
         input[type=file] {
             width: 300px;
         }
@@ -31,6 +31,7 @@
             margin-right: 25px;
         }
     </style>
+    <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
 <h1>Загрузить отчеты брокера</h1>

@@ -23,7 +23,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
-    <style>
+    <style data-turbo-track="dynamic">
         .main {
             display: flex;
             flex-wrap: wrap;
@@ -49,6 +49,14 @@
             margin-left: -20px;
         }
     </style>
+    <meta name="turbo-cache-control" content="no-cache">
+    <meta name="turbo-prefetch" content="false">
+    <link rel="stylesheet" href="/app-shell.css" data-turbo-track="reload">
+    <script defer src="/vendor/turbo-8.0.20.js" data-turbo-track="reload"></script>
+    <script defer src="/app-shell.js" data-turbo-track="reload"></script>
+    <script defer src="/home-page.js" data-turbo-track="reload"></script>
+    <script defer src="/account-analysis-charts.js" data-turbo-track="reload"></script>
+    <script defer src="/composition-charts.js" data-turbo-track="reload"></script>
 </head>
 <body>
 <h1>Формы</h1>

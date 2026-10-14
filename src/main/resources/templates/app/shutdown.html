@@ -21,7 +21,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Investbook</title>
-    <style>
+    <style data-turbo-track="dynamic">
         body {
             margin: 0;
             height: 100vh;
@@ -37,6 +37,7 @@
             font-size: 1.2em;
         }
     </style>
+    <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
 <div id="text">

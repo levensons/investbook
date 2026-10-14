@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+(() => {
 const chartRoots = []
+let requestController
+let generation = 0
+let defaultFrom, defaultTo
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEPOSIT_COLOR = 0x2e7d32
 const WITHDRAWAL_COLOR = 0xc62828
@@ -135,6 +139,9 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
     const root = am5.Root.new(elementId)
     chartRoots.push(root)
     root.setThemes([am5themes_Animated.new(root)])
+    root.locale = {...root.locale, _decimalSeparator: ",", _thousandSeparator: " "}
+    root.interfaceColors.set("grid", am5.color(0xe1e7df))
+    root.interfaceColors.set("text", am5.color(0x60705f))
     root.dateFormatter.setAll({
         dateFormat: "dd.MM.yyyy",
         dateFields: ["valueX"]
@@ -153,6 +160,8 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
 
     const xAxis = chart.xAxes.push(am5xy.DateAxis.new(root, {
         baseInterval: {timeUnit: "day", count: 1},
+        dateFormats: {day: "dd.MM", week: "dd.MM", month: "MM.yyyy", year: "yyyy"},
+        periodChangeDateFormats: {day: "dd.MM.yyyy", week: "dd.MM.yyyy", month: "MM.yyyy", year: "yyyy"},
         renderer: am5xy.AxisRendererX.new(root, {
             minGridDistance: 70
         }),
@@ -165,6 +174,7 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
     }))
 
     const lineSeries = []
+    chart.get("colors").set("colors", [am5.color(0x367354), am5.color(0x9ea985), am5.color(0xb79060)])
     for (const definition of seriesDefinitions) {
         const series = chart.series.push(am5xy.LineSeries.new(root, {
             name: definition.name,
@@ -211,6 +221,10 @@ function createLineChart(elementId, data, seriesDefinitions, numberFormat, value
 }
 
 async function loadCharts() {
+    requestController?.abort()
+    requestController = new AbortController()
+    const signal = requestController.signal
+    const currentGeneration = ++generation
     const form = document.getElementById("chart-filter")
     const status = document.getElementById("chart-status")
     const accountInputs = Array.from(form.querySelectorAll("input[name='account']"))
@@ -219,22 +233,34 @@ async function loadCharts() {
         status.classList.add("error")
         return
     }
+    if (form.querySelector("#to-date").value < form.querySelector("#from-date").value) {
+        status.textContent = "Дата окончания должна быть не раньше даты начала."
+        status.classList.add("error")
+        return
+    }
     const query = new URLSearchParams(new FormData(form))
+    // The visible URL is also the source of truth for reload and browser history.
+    history.replaceState(history.state, "", location.pathname + "?" + query.toString())
 
     status.textContent = "Загружаю данные…"
     status.classList.remove("error")
     try {
-        const response = await fetch("/charts/account-analysis/data?" + query.toString())
+        const response = await fetch("/charts/account-analysis/data?" + query.toString(), {signal})
         if (!response.ok) {
             throw new Error("сервер вернул HTTP " + response.status)
         }
         const points = await response.json()
+        if (signal.aborted || currentGeneration !== generation || !form.isConnected) return
         disposeCharts()
         if (points.length === 0) {
             status.textContent = "За выбранный период данных нет."
             return
         }
 
+        for (const src of ["index.js", "xy.js", "themes/Animated.js"]) {
+            await Investbook.loadScript("https://cdn.amcharts.com/lib/5/" + src)
+            if (signal.aborted || currentGeneration !== generation || !form.isConnected) return
+        }
         const assetsSeries = [
             {name: "Расчётная стоимость", field: "estimatedAssetsRub", cashFlowMarkers: true},
             {name: "Чистые пополнения", field: "totalInvestmentRub"}
@@ -256,15 +282,43 @@ async function loadCharts() {
             "; IMOEX: " + imoexPointCount +
             "; MCFTRR: " + mcftrrPointCount
     } catch (error) {
+        if (signal.aborted || currentGeneration !== generation || !form.isConnected) return
         disposeCharts()
         status.textContent = "Не удалось построить графики: " + error.message
         status.classList.add("error")
     }
 }
 
-document.getElementById("chart-filter").addEventListener("submit", event => {
-    event.preventDefault()
+document.addEventListener("investbook:page-load", () => {
+    const form = document.getElementById("chart-filter")
+    if (!form) return
+    defaultFrom = document.getElementById("from-date").defaultValue
+    defaultTo = document.getElementById("to-date").defaultValue
+    form.addEventListener("change", event => {
+        if (event.target.type === "date") form.querySelectorAll("[data-period]").forEach(button => button.setAttribute("aria-pressed", "false"))
+    })
+    form.addEventListener("submit", event => { event.preventDefault(); loadCharts() })
+    form.querySelectorAll("[data-period]").forEach(button => button.addEventListener("click", () => {
+        const to = document.getElementById("to-date")
+        const from = document.getElementById("from-date")
+        if (button.dataset.period === "all") { from.value = defaultFrom; to.value = defaultTo }
+        else {
+            const end = new Date((to.value || defaultTo) + "T12:00:00Z")
+            const targetMonth = end.getUTCMonth() - (button.dataset.period === "month" ? 1 : 12)
+            const day = end.getUTCDate()
+            end.setUTCDate(1); end.setUTCMonth(targetMonth)
+            const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate()
+            end.setUTCDate(Math.min(day, lastDay))
+            from.value = end.toISOString().slice(0, 10)
+        }
+        form.querySelectorAll("[data-period]").forEach(b => b.setAttribute("aria-pressed", String(b === button)))
+        form.requestSubmit()
+    }))
     loadCharts()
 })
-
-loadCharts()
+document.addEventListener("investbook:page-leave", () => {
+    generation++
+    requestController?.abort()
+    disposeCharts()
+})
+})()

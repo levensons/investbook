@@ -28,6 +28,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import ru.investbook.report.ViewFilter;
 import ru.investbook.report.excel.AccountAnalysisChartService;
 import ru.investbook.repository.AccountRepository;
@@ -35,7 +37,6 @@ import ru.investbook.web.model.AccountAnalysisChartPoint;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -87,10 +88,16 @@ public class AccountAnalysisChartController {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("Дата окончания периода не может быть раньше даты начала");
         }
+        Set<String> selected = accounts == null ? getActiveAccounts(accountRepository) : accounts;
+        if (accounts != null && (selected.isEmpty() || !getAccounts(accountRepository).containsAll(selected))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите существующий счёт");
+        }
+        // An empty UI selection must never activate the legacy "all accounts" convention.
+        if (selected.isEmpty()) return List.of();
         ViewFilter filter = ViewFilter.builder()
                 .fromDate(from.atStartOfDay(systemDefault()).toInstant())
                 .toDate(to.plus(1, ChronoUnit.DAYS).atStartOfDay(systemDefault()).toInstant().minusSeconds(1))
-                .accounts(accounts == null ? Collections.emptySet() : accounts)
+                .accounts(selected)
                 .showDetails(false)
                 .build();
         return chartService.getChartPoints(filter);

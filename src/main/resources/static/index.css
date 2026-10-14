@@ -1,239 +1,32 @@
-/*
- * InvestBook
- * Copyright (C) 2021  Spacious Team <spacious-team@ya.ru>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-body {
-    background: url(background.jpg) no-repeat;
-    background-color: #193783;
-    background-size: cover;
-    color: #EEE;
-    font-size: 16px;
-    font-family: Arial, serif;
-    margin: 0;
-    min-width: 1024px;
-}
-
-.content {
-    box-sizing: border-box;
-    min-height: 100vh;
-    padding: 50px 25px 20px;
-    display: flex;
-    flex-direction: column;
-}
-
-a {
-    color: #EEE;
-    text-decoration: none;
-    transition-duration: 0.2s;
-}
-
-a:hover {
-    transition-duration: 0.2s;
-}
-
-:not(a) > span, :not(a) > p {
-    cursor: default;
-}
-
-.logo {
-    width: 38px;
-    height: 38px;
-}
-
-.row {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    max-width: 1200px;
-    min-width: 320px;
-    margin: auto;
-}
-
-.row .cell {
-    margin: auto;
-}
-
-.row .cell span {
-    display: inline-block;
-}
-
-.row .cell p {
-    display: block;
-    margin: 0;
-}
-
-.header {
-    margin-top: 0;
-}
-
-.site-name {
-    font-size: 20px;
-    line-height: 20px;
-}
-
-.transaction-count {
-    font-size: 46px;
-    line-height: 46px;
-    margin-right: 4px;
-}
-
-.accounts {
-    display: inline-block;
-    font-size: smaller;
-    margin-top: 12px;
-}
-
-.header svg {
-    width: 32px;
-    height: 32px;
-}
-
-.header svg path {
-    fill: #eee;
-    vector-effect: non-scaling-stroke;
-}
-
-.wallet {
-    display: flex;
-    align-items: center;
-    margin-right: 10px;
-}
-
-.wallet svg {
-    margin-top: -5px;
-}
-
-.wallet span {
-    margin-left: 10px;
-}
-
-.header .exit {
-    margin: auto 0 auto 0;
-}
-
-.assets {
-    justify-content: flex-start;
-}
-
-.assets .cell {
-    margin: 80px 100px;
-}
-
-.assets a.assets-detail {
-    color: rgba(238, 238, 238, 0.5);
-    text-decoration: none;
-    transition-duration: 0.2s;
-}
-
-.assets a.assets-detail:hover {
-    color: #EEE;
-    transition-duration: 0.2s;
-}
-
-.assets .label {
-    font-size: 40px;
-    margin-bottom: 50px;
-}
-
-.assets .value {
-    font-size: 90px;
-    font-weight: bolder;
-}
-
-.assets .portfolio-value-status {
-    color: rgba(238, 238, 238, 0.55);
-    font-size: 14px;
-    margin: 12px 0 0;
-}
-
-.links {
-    margin-bottom: 100px;
-}
-
-.links a {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    height: 180px;
-    width: 180px;
-}
-
-.links a:hover {
-    color: #0e67becc;
-    background-color: white;
-}
-
-.links svg {
-    width: 75%;
-    margin-left: 20%;
-}
-
-.links a svg path {
-    fill: #eee;
-    vector-effect: non-scaling-stroke;
-    transition-duration: 0.2s;
-}
-
-.links a:hover svg path {
-    fill: #0e67becc;
-    transition-duration: 0.2s;
-}
-
-.links span {
-    width: 100%;
-    text-align: center;
-    font-size: 24px;
-}
-
-.footer {
-    margin-bottom: 0;
-}
-
-.footer a {
-    display: flex;
-    align-items: center;
-}
-
-.footer a:hover {
-    text-decoration: underline;
-}
-
-.footer a path {
-    fill: #eee;
-    transition-duration: 0.1s;
-    vector-effect: non-scaling-stroke;
-}
-
-.footer a:hover path {
-    stroke: #eee2;
-    stroke-width: 4px;
-    transition-duration: 0.1s;
-}
-
-.footer svg {
-    width: 20px;
-    height: 20px;
-}
-
-.footer a span {
-    margin-left: 6px;
-}
-
-.blink {
-    color: #FFF;
-}
+/* InvestBook overview. AGPL-3.0-or-later. */
+.overview-metrics { display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: 18px; margin-bottom: 26px; }
+.metric { background: white; border: 1px solid #dfe5df; border-radius: 12px; padding: 24px; min-height: 208px; }
+.metric-primary { background: #e4eddf; border-color: #d3dfcd; }
+.metric-label { font-size: 12px; color: #5d6f5f; display: flex; align-items: center; justify-content: space-between; }
+.currency-tag { border: 1px solid #c2d2bc; border-radius: 4px; padding: 1px 7px; font-size: 10px; letter-spacing: .6px; }
+.metric .metric-number { display: block; color: #253b2a; font-size: 34px; line-height: 1.2; letter-spacing: -1.3px; font-weight: 550; margin: 22px 0 10px; font-variant-numeric: tabular-nums; }
+.metric-primary .metric-number { font-size: 42px; margin-top: 16px; }
+.metric p { font-size: 11px; color: #6e7e6e; margin: 0; min-height: 18px; }
+.metric .metric-detail { display: flex; justify-content: space-between; margin-top: 24px; font-size: 11px; color: #4f6e55; }
+.welcome-panel { display: flex; gap: 25px; padding: 28px 32px; margin: 0 0 26px; border: 1px solid #dce4da; border-radius: 12px; background: #edf1e9; }
+.welcome-symbol { width: 56px; height: 56px; flex-shrink: 0; display: grid; place-items: center; background: #dde7d6; border-radius: 50%; color: #577c52; font-size: 30px; }
+.welcome-panel h2 { margin: 0; }
+.welcome-panel p:not(.eyebrow) { margin: 8px 0 18px; color: #697769; font-size: 13px; }
+.welcome-actions { display: flex; align-items: center; gap: 22px; font-size: 12px; }
+.overview-columns { display: grid; grid-template-columns: 1fr 1.2fr; gap: 22px; }
+.overview-panel { border: 1px solid #dfe5df; border-radius: 12px; background: white; padding: 24px; }
+.panel-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 17px; }
+.panel-heading h2 { margin: 0; }
+.count-badge { color: #70826e; background: #edf2e9; border-radius: 6px; font-size: 11px; padding: 1px 8px; }
+.panel-kicker { margin-left: auto; font-size: 9px; letter-spacing: 1.3px; color: #7c897d; }
+.empty-description { color: #778378; font-size: 13px; line-height: 1.8; padding: 20px 0 27px; }
+.explore-row, .account-row { display: flex; align-items: center; gap: 15px; padding: 17px 0; border-bottom: 1px solid #edf1eb; }
+.explore-row:last-child { border: none; padding-bottom: 0; }
+.explore-row strong, .account-row strong { display: block; font-size: 13px; font-weight: 550; color: #344839; }
+.explore-row small, .account-row small { display: block; font-size: 11px; color: #7a877b; margin-top: 3px; }
+.explore-row:hover, .account-row:hover { text-decoration: none !important; }
+.explore-row:hover strong, .account-row:hover strong { color: #1e7549; }
+.explore-icon, .account-symbol { display: grid; place-items: center; background: #f0f4ed; width: 35px; height: 35px; border-radius: 8px; font-size: 21px; color: #65825f; flex-shrink: 0; }
+.row-arrow { margin-left: auto; color: #8d9e8e; }
+.panel-footer-link { display: block; margin-top: 22px; font-size: 12px; }
+.overview-footnote { display: flex; justify-content: space-between; margin-top: 28px; color: #879287; font-size: 10px; }

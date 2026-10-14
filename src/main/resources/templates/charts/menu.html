@@ -20,24 +20,11 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="ru">
 <body>
 
-<p class="menu" th:fragment="charts_menu" th:with="style='text-decoration: underline'">
-
-    <span th:with="link='/charts/account-analysis'">
-        <a th:href="${link}"
-           th:style="(${request.requestURI} == ${link}) ? ${style} : ''">Доходность</a>
-    </span>
-
-    <span th:with="link='/charts/sectors-pie-chart'">
-        <a th:href="${link}"
-           th:style="(${request.requestURI} == ${link}) ? ${style} : ''">Секторальный состав</a>
-    </span>
-
-    <span th:with="link='/charts/securities-pie-chart'">
-    <a th:href="${link}"
-       th:style="(${request.requestURI} == ${link}) ? ${style} : ''">Состав бумаг</a>
-    </span>
-
-</p>
+<nav class="menu" th:fragment="charts_menu" aria-label="Разделы аналитики">
+    <a href="/charts/account-analysis" th:attr="aria-current=${request.requestURI == '/charts/account-analysis' ? 'page' : null}">Стоимость и рост</a>
+    <a href="/charts/securities-pie-chart" th:attr="aria-current=${request.requestURI == '/charts/securities-pie-chart' ? 'page' : null}">По бумагам</a>
+    <a href="/charts/sectors-pie-chart" th:attr="aria-current=${request.requestURI == '/charts/sectors-pie-chart' ? 'page' : null}">По секторам</a>
+</nav>
 
 </body>
 </html>

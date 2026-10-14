@@ -24,44 +24,26 @@
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
     <link rel="stylesheet" href="/charts.css">
-    <script src="https://cdn.amcharts.com/lib/4/core.js"></script>
-    <script src="https://cdn.amcharts.com/lib/4/charts.js"></script>
-    <script src="https://cdn.amcharts.com/lib/4/themes/animated.js"></script>
+        <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
-<h1>Диаграммы</h1>
+<div class="page-heading"><div><p class="eyebrow">ДИНАМИКА И СТРУКТУРА</p><h1>Аналитика портфеля</h1><p class="page-subtitle">Состав по последним доступным оценкам · выбранный период сохраняется для графика роста</p></div></div>
 <a href="/">На главную</a><br>
 <p th:replace="~{charts/menu :: charts_menu}"></p>
-<div id="chartdiv"></div>
-
-<script th:inline="javascript">
-    am4core.ready(function () {
-
-        // Themes begin
-        am4core.useTheme(am4themes_animated);
-        // Themes end
-
-        // Create chart instance
-        var chart = am4core.create("chartdiv", am4charts.PieChart);
-
-        // Add data
-        chart.data = /*[[ ${sectorsProportion} ]]*/ [{"sector": "Другое", "investment": 100}];
-
-        // Add and configure Series
-        var pieSeries = chart.series.push(new am4charts.PieSeries());
-        pieSeries.dataFields.value = "investment";
-        pieSeries.dataFields.category = "sector";
-        pieSeries.slices.template.stroke = am4core.color("#fff");
-        pieSeries.slices.template.strokeWidth = 2;
-        pieSeries.slices.template.strokeOpacity = 1;
-
-        // This creates initial animation
-        pieSeries.hiddenState.properties.opacity = 1;
-        pieSeries.hiddenState.properties.endAngle = -90;
-        pieSeries.hiddenState.properties.startAngle = -90;
-
-    }); // end am4core.ready()
-</script>
+<form th:hidden="${allAccounts.isEmpty()}" id="composition-filter" class="chart-filter" method="get">
+    <input id="from-date" name="from" type="hidden" th:value="${defaultFromDate}">
+    <input id="to-date" name="to" type="hidden" th:value="${defaultToDate}">
+    <fieldset th:if="${!allAccounts.isEmpty()}"><legend>Счета</legend>
+        <label th:each="account : ${allAccounts}"><input type="checkbox" name="account" th:value="${account}" th:checked="${selectedAccounts.contains(account)}"><span th:text="${account}"></span></label>
+    </fieldset>
+    <button type="submit" class="primary">Применить</button>
+</form>
+<p id="composition-status" class="chart-status" role="status" aria-live="polite"></p>
+<section class="chart-card"><h2>Распределение по секторам</h2>
+    <div id="chartdiv" data-category="sector"></div>
+</section>
+<script id="composition-data" type="application/json" th:inline="javascript">[[${sectorsProportion}]]</script>
+<details class="methodology"><summary>Как рассчитывается состав</summary>
 
 <p class="hint">
     Если все инвестиции отображаются в разделе "Другое", или если вы начали торговать новой бумагой,
@@ -81,5 +63,6 @@
     Эта страница требует интернет соединения для отрисовки круговой диаграммы.
 </p>
 
+</details>
 </body>
 </html>

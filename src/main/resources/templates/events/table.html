@@ -23,7 +23,7 @@
     <title>События по счетам</title>
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
-    <style>
+    <style data-turbo-track="dynamic">
         body {
             max-width: 95%;
         }
@@ -32,6 +32,7 @@
             text-decoration: none;
         }
     </style>
+    <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
 
