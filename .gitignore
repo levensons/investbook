@@ -36,3 +36,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Local Python launcher checks
+__pycache__/

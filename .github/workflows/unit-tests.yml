@@ -48,3 +48,15 @@ jobs:
         # For security, 'secrets.*' are not exposed to external pull requests
         # SonarCloud analysis is skipped in these cases
         if: ${{ github.event.pull_request == null || github.event.pull_request.head.repo.full_name == github.repository }}
+
+  linux-launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Linux launcher regression checks
+        run: |
+          bash -n setup.sh run.sh
+          python3 -m unittest discover -s tests/launcher -v

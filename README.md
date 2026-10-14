@@ -198,6 +198,11 @@ Investbook в сравнении с [Intelinvest](https://intelinvest.ru) и [Sn
 > [_Интервью 2023 г_](https://www.youtube.com/watch?v=bOznEZAjX3I&t=5138s)
 </details>
 
+### Запуск одной командой на Linux
+
+Для Linux с systemd: один раз `./setup.sh`, затем `./run.sh` или значок Investbook в меню.
+[Подготовка, существующая база и подключение к ChatGPT](docs/linux-launcher.md).
+
 ### Подключение через MCP
 
 Локальный MCP-модуль предоставляет шесть инструментов чтения портфеля, распределения активов,
