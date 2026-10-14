@@ -165,8 +165,14 @@ public class AgentAnalyticsService {
                     reason = "UNSUPPORTED_ASSET_TYPE";
                 } else if (quote == null) {
                     reason = "MISSING_QUOTE";
-                } else if (quote.getCurrency() == null || (security.getType() != SecurityType.STOCK && quote.getPrice() == null)) {
-                    reason = "MISSING_PRICE_OR_CURRENCY";
+                } else if (quote.getCurrency() == null || Objects.requireNonNull(quote.getCurrency()).isBlank()) {
+                    reason = "MISSING_QUOTE_CURRENCY";
+                } else if (quote.getPrice() == null
+                        && (security.getType() == SecurityType.BOND || quote.getAccruedInterest() != null)) {
+                    // SecurityQuote uses quote as money when price and accruedInterest are absent.
+                    // A present accruedInterest (even zero) marks a bond quote, including STOCK_OR_BOND.
+                    // Known bonds also require an absolute price when accrued interest is unavailable.
+                    reason = "MISSING_ABSOLUTE_PRICE";
                 } else {
                     BigDecimal price = quote.getPrice() == null ? quote.getQuote() : Objects.requireNonNull(quote.getPrice());
                     if (quote.getAccruedInterest() != null) price = price.add(Objects.requireNonNull(quote.getAccruedInterest()));
@@ -181,6 +187,10 @@ public class AgentAnalyticsService {
                 holdings.add(map("account_id", publicId, "security_id", security.getId(), "ticker", security.getTicker(),
                         "name", security.getName(), "type", security.getType().name(), "sector", sector,
                         "quantity", decimal(quantity.getValue()), "value_rub", decimal(value), "unvalued_reason", reason,
+                        "quote", quote == null ? null : decimal(quote.getQuote()),
+                        "price", quote == null ? null : decimal(quote.getPrice()),
+                        "accrued_interest", quote == null ? null : decimal(quote.getAccruedInterest()),
+                        "quote_currency", quote == null ? null : quote.getCurrency(),
                         "quote_at", quote == null ? null : quote.getTimestamp(), "quote_source_id", quote == null ? null : "security_quote:" + quote.getId()));
                 if (value != null) { total = total.add(value); values.add(new Value("security:" + security.getId(), sector, value)); }
             }
