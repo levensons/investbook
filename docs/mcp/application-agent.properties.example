@@ -1,0 +1,9 @@
+# Copy outside the repository, replace only the private account identifiers locally.
+# Keep this file private: the values below correspond to broker accounts.
+server.address=127.0.0.1
+server.forward-headers-strategy=none
+investbook.agent.enabled=true
+investbook.agent.timezone=Europe/Moscow
+investbook.agent.accounts.main=REPLACE_WITH_EXISTING_ACCOUNT_ID
+# investbook.agent.accounts.second=REPLACE_WITH_ANOTHER_ACCOUNT_ID
+# No token here. Supply INVESTBOOK_AGENT_TOKEN to both processes through the environment.

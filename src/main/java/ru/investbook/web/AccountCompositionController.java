@@ -25,6 +25,12 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import ru.investbook.repository.AccountRepository;
+import java.time.LocalDate;
 import ru.investbook.service.AssetsAndCashService;
 import ru.investbook.service.InvestmentProportionService;
 
@@ -42,17 +48,19 @@ public class AccountCompositionController {
 
     private final InvestmentProportionService investmentProportionService;
     private final AssetsAndCashService assetsAndCashService;
+    private final AccountRepository accountRepository;
 
     @GetMapping("/sectors-pie-chart")
-    public String getSectorsProportionPage(Model model, HttpServletRequest request) {
+    public String getSectorsProportionPage(Model model, HttpServletRequest request,
+            @RequestParam(name = "account", required = false) @Nullable Set<String> requestedAccounts) {
+        Set<String> accounts = selectAccounts(model, requestedAccounts);
         try {
-            Set<String> accounts = assetsAndCashService.getActiveAccounts();
-            Collection<Map<String, ?>> sectorsProportion = investmentProportionService.getSectorsProportion(accounts)
+            Collection<Map<String, ?>> sectorsProportion = (accounts.isEmpty() ? Map.<String, Float>of() : investmentProportionService.getSectorsProportion(accounts))
                     .entrySet()
                     .stream()
                     .map(e -> Map.of("sector", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
                     .collect(toList());
-            int cash = assetsAndCashService.getTotalCashInRub(accounts)
+            int cash = accounts.isEmpty() ? 0 : assetsAndCashService.getTotalCashInRub(accounts)
                     .map(Number::intValue)
                     .orElse(0);
             sectorsProportion.add(Map.of("sector", "Кеш", "investment", cash));
@@ -69,15 +77,16 @@ public class AccountCompositionController {
     }
 
     @GetMapping("/securities-pie-chart")
-    public String getSecuritiesProportionPage(Model model, HttpServletRequest request) {
+    public String getSecuritiesProportionPage(Model model, HttpServletRequest request,
+            @RequestParam(name = "account", required = false) @Nullable Set<String> requestedAccounts) {
+        Set<String> accounts = selectAccounts(model, requestedAccounts);
         try {
-            Set<String> accounts = assetsAndCashService.getActiveAccounts();
-            Collection<Map<String, ?>> securitiesProportion = investmentProportionService.getSecuritiesProportion(accounts)
+            Collection<Map<String, ?>> securitiesProportion = (accounts.isEmpty() ? Map.<String, Float>of() : investmentProportionService.getSecuritiesProportion(accounts))
                     .entrySet()
                     .stream()
                     .map(e -> Map.of("security", e.getKey(), "investment", ((Number) e.getValue()).intValue()))
                     .collect(toList());
-            int cash = assetsAndCashService.getTotalCashInRub(accounts)
+            int cash = accounts.isEmpty() ? 0 : assetsAndCashService.getTotalCashInRub(accounts)
                     .map(Number::intValue)
                     .orElse(0);
             securitiesProportion.add(Map.of("security", "Кеш", "investment", cash));
@@ -92,4 +101,17 @@ public class AccountCompositionController {
             return "success";
         }
     }
+    private Set<String> selectAccounts(Model model, @Nullable Set<String> requestedAccounts) {
+        Set<String> all = ControllerHelper.getAccounts(accountRepository);
+        Set<String> selected = requestedAccounts == null ? assetsAndCashService.getActiveAccounts() : requestedAccounts;
+        if (requestedAccounts != null && (selected.isEmpty() || !all.containsAll(selected))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Выберите существующий счёт");
+        }
+        model.addAttribute("allAccounts", all);
+        model.addAttribute("selectedAccounts", selected);
+        model.addAttribute("defaultFromDate", LocalDate.now().minusYears(1));
+        model.addAttribute("defaultToDate", LocalDate.now());
+        return selected;
+    }
+
 }

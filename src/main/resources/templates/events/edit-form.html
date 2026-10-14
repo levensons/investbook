@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
     <link rel="stylesheet" href="/main.css">
-    <style>
+    <style data-turbo-track="dynamic">
         #account {
             width: 250px;
         }
@@ -49,6 +49,7 @@
             margin: 0;
         }
     </style>
+    <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
 

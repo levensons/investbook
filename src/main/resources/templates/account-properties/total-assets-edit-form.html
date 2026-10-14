@@ -24,11 +24,12 @@
     <title th:unless="${property.id == null}">Редактировать оценку стоимости активов</title>
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
-    <style>
+    <style data-turbo-track="dynamic">
         #totalAssets {
             width: 135px;
         }
     </style>
+    <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
 

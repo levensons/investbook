@@ -254,7 +254,7 @@ public class DailyPortfolioValueService {
             if (cashFlow.getCashFlowType().getId() == CashFlowType.CASH.getId()) {
                 rubByDate.merge(
                         date,
-                        convertToRub(cashFlow.getValue(), cashFlow.getCurrency()),
+                        convertToRub(cashFlow.getValue(), cashFlow.getCurrency(), date),
                         BigDecimal::add);
             }
             cashChangesByDate.computeIfAbsent(date, _ -> new HashMap<>())
@@ -341,7 +341,7 @@ public class DailyPortfolioValueService {
                 continue;
             }
             if (property.getProperty().equals(TOTAL_ASSETS_USD.name())) {
-                value = convertToRub(value, "USD");
+                value = convertToRub(value, "USD", toDate(property.getTimestamp(), zoneId));
             }
             snapshots.computeIfAbsent(property.getTimestamp(), _ -> new HashMap<>())
                     .merge(property.getAccount().getId(), value, BigDecimal::add);
@@ -378,7 +378,8 @@ public class DailyPortfolioValueService {
         List<DailyPortfolioValue> result = new ArrayList<>();
         @Nullable BigDecimal previousAssets = null;
         BigDecimal cumulativeGrowth = BigDecimal.ONE;
-        BigDecimal cashFlowSincePreviousPoint = BigDecimal.ZERO;
+        BigDecimal inflowsSincePreviousPoint = BigDecimal.ZERO;
+        BigDecimal outflowsSincePreviousPoint = BigDecimal.ZERO;
         BigDecimal cashReconciliationSincePreviousPoint = BigDecimal.ZERO;
         BigDecimal reconciliation = BigDecimal.ZERO;
 
@@ -392,9 +393,11 @@ public class DailyPortfolioValueService {
             mergeCashChanges(cash, transactionCashChanges.getOrDefault(date, Map.of()));
             mergeCashChanges(cash, cashFlows.cashChangesByDate().getOrDefault(date, Map.of()));
             cashReconciliationSincePreviousPoint = cashReconciliationSincePreviousPoint.add(
-                    applyCashSnapshot(cash, cashByDate.getOrDefault(date, Map.of())));
-            cashFlowSincePreviousPoint = cashFlowSincePreviousPoint.add(
-                    cashFlows.externalRubByDate().getOrDefault(date, BigDecimal.ZERO));
+                    applyCashSnapshot(cash, cashByDate.getOrDefault(date, Map.of()), date));
+            // Net flows across selected accounts first, so a same-day internal transfer cancels out.
+            BigDecimal netFlow = cashFlows.externalRubByDate().getOrDefault(date, BigDecimal.ZERO);
+            inflowsSincePreviousPoint = inflowsSincePreviousPoint.add(netFlow.max(BigDecimal.ZERO));
+            outflowsSincePreviousPoint = outflowsSincePreviousPoint.add(netFlow.min(BigDecimal.ZERO).negate());
 
             boolean brokerValuationDay = brokerAssetsByDate.containsKey(date);
             if ((!brokerValuationDay && date.isBefore(outputFrom)) ||
@@ -416,27 +419,24 @@ public class DailyPortfolioValueService {
             if (date.isBefore(outputFrom)) {
                 continue;
             }
-            double growth;
-            if (previousAssets == null || previousAssets.signum() == 0) {
-                cumulativeGrowth = BigDecimal.ONE;
-                growth = 0;
-            } else {
-                BigDecimal assetsBeforeExternalCashFlow = assets
-                        .subtract(cashFlowSincePreviousPoint)
+            // Daily approximation: net inflows enter at the start, net outflows leave at the end.
+            // Exact intraday TWR requires valuations at the times of the cash flows.
+            if (previousAssets != null) {
+                BigDecimal investedCapital = previousAssets.add(inflowsSincePreviousPoint);
+                BigDecimal adjustedClosingAssets = assets
+                        .add(outflowsSincePreviousPoint)
                         .subtract(cashReconciliationSincePreviousPoint)
                         .subtract(reconciliationChange);
-                BigDecimal periodGrowth = assetsBeforeExternalCashFlow.divide(
-                        previousAssets,
-                        20,
-                        RoundingMode.HALF_UP);
-                cumulativeGrowth = cumulativeGrowth.multiply(periodGrowth);
-                growth = cumulativeGrowth.subtract(BigDecimal.ONE)
-                        .multiply(BigDecimal.valueOf(100))
-                        .doubleValue();
+                if (investedCapital.signum() > 0) {
+                    BigDecimal periodGrowth = adjustedClosingAssets.divide(investedCapital, 20, RoundingMode.HALF_UP);
+                    cumulativeGrowth = cumulativeGrowth.multiply(periodGrowth);
+                }
             }
+            double growth = cumulativeGrowth.subtract(BigDecimal.ONE).multiply(BigDecimal.valueOf(100)).doubleValue();
             result.add(new DailyPortfolioValue(date, assets.doubleValue(), growth));
             previousAssets = assets;
-            cashFlowSincePreviousPoint = BigDecimal.ZERO;
+            inflowsSincePreviousPoint = BigDecimal.ZERO;
+            outflowsSincePreviousPoint = BigDecimal.ZERO;
             cashReconciliationSincePreviousPoint = BigDecimal.ZERO;
         }
         return result;
@@ -451,7 +451,8 @@ public class DailyPortfolioValueService {
 
     private BigDecimal applyCashSnapshot(
             Map<AccountCurrency, BigDecimal> cash,
-            Map<AccountCurrency, BigDecimal> snapshot) {
+            Map<AccountCurrency, BigDecimal> snapshot,
+            LocalDate date) {
         BigDecimal adjustmentRub = BigDecimal.ZERO;
         for (Map.Entry<AccountCurrency, BigDecimal> entry : snapshot.entrySet()) {
             AccountCurrency accountCurrency = entry.getKey();
@@ -460,7 +461,7 @@ public class DailyPortfolioValueService {
             cash.put(accountCurrency, updated);
             adjustmentRub = adjustmentRub.add(convertToRub(
                     updated.subtract(previous),
-                    accountCurrency.currency()));
+                    accountCurrency.currency(), date));
         }
         return adjustmentRub;
     }
@@ -497,12 +498,12 @@ public class DailyPortfolioValueService {
             @Nullable String currency = quote.getCurrency();
             String quoteCurrency = normalizeCurrency(currency == null ? "RUB" : currency);
             BigDecimal value = unitPrice.multiply(BigDecimal.valueOf(count));
-            result = result.add(convertToRub(value, quoteCurrency));
+            result = result.add(convertToRub(value, quoteCurrency, date));
         }
         for (Map.Entry<AccountCurrency, BigDecimal> cashEntry : cash.entrySet()) {
             result = result.add(convertToRub(
                     cashEntry.getValue(),
-                    cashEntry.getKey().currency()));
+                    cashEntry.getKey().currency(), date));
         }
         return result;
     }
@@ -523,11 +524,12 @@ public class DailyPortfolioValueService {
         return quotes.values().stream().anyMatch(values -> values.containsKey(date));
     }
 
-    private BigDecimal convertToRub(BigDecimal value, String currency) {
+    private BigDecimal convertToRub(BigDecimal value, String currency, LocalDate date) {
         return foreignExchangeRateService.convertValueToCurrency(
                 value,
                 normalizeCurrency(currency),
-                RUB);
+                RUB,
+                date);
     }
 
     private static LocalDate toDate(Instant instant, ZoneId zoneId) {

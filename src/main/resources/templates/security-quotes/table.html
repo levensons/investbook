@@ -23,11 +23,24 @@
     <title>Котировки</title>
     <link rel="stylesheet" href="/water-light.css"> <!-- https://cdn.jsdelivr.net/npm/water.css@2/out/light.css -->
     <link rel="stylesheet" href="/water-wrapper.css">
-    <style>
+    <style data-turbo-track="dynamic">
         body {
             max-width: 75%;
         }
     </style>
+    <meta name="turbo-cache-control" content="no-cache">
+    <meta name="turbo-prefetch" content="false">
+    <link rel="stylesheet" href="/app-shell.css" data-turbo-track="reload">
+    <script defer src="/vendor/turbo-8.0.20.js" data-turbo-track="reload">    })();
+</script>
+    <script defer src="/app-shell.js" data-turbo-track="reload">    })();
+</script>
+    <script defer src="/home-page.js" data-turbo-track="reload">    })();
+</script>
+    <script defer src="/account-analysis-charts.js" data-turbo-track="reload">    })();
+</script>
+    <script defer src="/composition-charts.js" data-turbo-track="reload">    })();
+</script>
 </head>
 <body>
 
@@ -86,11 +99,13 @@
 </div>
 
 <script type="text/javascript">
+    (() => {
     let elements = document.getElementsByClassName("date-time")
     for (var i = 0; i < elements.length; i++) {
         let e = elements[i];
         e.innerText = new Date(e.innerText).toLocaleString()
     }
+    })();
 </script>
 
 </body>

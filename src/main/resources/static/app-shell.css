@@ -1,0 +1,101 @@
+/* InvestBook shared desktop workspace. AGPL-3.0-or-later. */
+:root {
+    --canvas: #f3f5f3; --surface: #fff; --ink: #202e2a; --muted: #67756e;
+    --line: #dfe5df; --accent: #24664c; --accent-soft: #e9f2ec;
+    --background-body: var(--canvas); --background: #eef2ee; --background-alt: #f7f9f7;
+    --text-main: var(--ink); --text-bright: var(--ink); --text-muted: var(--muted);
+    --links: var(--accent); --border: var(--line); --focus: #24664c55;
+}
+html { display: block; min-height: 100%; background: var(--canvas); }
+body.app-body { margin: 0; padding: 0; min-width: 1120px; max-width: none; background: var(--canvas);
+    color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.app-body * { box-sizing: border-box; }
+.app-body a { color: var(--accent); text-decoration: none; }
+.app-body a:hover { text-decoration: underline; }
+.app-body a:focus-visible, .app-body button:focus-visible, .app-body input:focus-visible, .app-body summary:focus-visible { outline: 3px solid #428c6b; outline-offset: 3px; }
+#app-sidebar { position: fixed; inset: 0 auto 0 0; width: 232px; padding: 30px 18px 22px; display: flex; flex-direction: column;
+    background: #1e3029; color: #d0ddd5; z-index: 20; }
+.app-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px; color: #fff !important; font-size: 21px; font-weight: 650; letter-spacing: -.5px; }
+.app-brand:hover { text-decoration: none !important; }
+.brand-mark { display: grid; place-content: center; position: relative; width: 39px; height: 42px; border: 1px solid #5b7465; border-radius: 11px; font-size: 25px; letter-spacing: -2px; }
+.brand-mark span { position: absolute; right: 8px; bottom: 4px; color: #a4c6ac; }
+.app-brand small { display: block; color: #a6bbae; font-size: 11px; font-weight: 400; letter-spacing: .2px; }
+.nav-caption { margin: 46px 13px 12px; font-size: 10px; letter-spacing: 1.8px; color: #94ad9e; }
+#app-sidebar nav { display: grid; gap: 6px; }
+#app-sidebar nav a { display: flex; align-items: center; gap: 13px; padding: 11px 13px; border-radius: 8px; color: #c7d6cd; font-size: 14px; font-weight: 500; }
+#app-sidebar nav a:hover { background: #2a4035; color: white; text-decoration: none; }
+#app-sidebar nav a[aria-current="page"] { background: #deebdf; color: #203e2c; }
+#app-sidebar svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sidebar-bottom { margin-top: auto; padding-top: 30px; }
+#app-sidebar .help-link { display: block; color: #b5c8bc; font-size: 12px; padding: 18px 12px; }
+.local-status { display: flex; gap: 8px; align-items: center; border-top: 1px solid #3c5045; padding: 20px 12px 0; color: #a3b9ab; font-size: 11px; }
+.local-status span { width: 6px; height: 6px; border-radius: 50%; background: #9cc4a7; }
+#app-header { height: 78px; margin-left: 232px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--line); background: var(--canvas); }
+.workspace-label { color: var(--muted); font-size: 10px; letter-spacing: 1.4px; }
+.header-divider { margin: 0 18px; color: #a6b2a9; }
+#app-section-title { color: #3e5145; font-size: 13px; letter-spacing: 0; }
+#app-main { overflow-x: auto; margin-left: 232px; padding: 38px 40px 60px; min-height: calc(100vh - 78px); outline: none; }
+#app-main > h1, .page-heading h1 { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -.9px; color: var(--ink); }
+#app-main > h1 { margin-bottom: 24px; }
+.page-heading { margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.eyebrow { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1.7px; text-transform: uppercase; margin: 0 0 8px; }
+.page-subtitle { color: var(--muted); font-size: 14px; margin: 7px 0 0; }
+.app-body .button, .app-body button, .app-body input[type=submit] { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 17px; border: 1px solid var(--line); border-radius: 7px; background: white; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; margin: 0; width: auto; }
+.app-body .button:hover, .app-body button:hover { background: #eaf0ea; text-decoration: none; }
+.app-body .primary, .app-body input[type=submit] { background: var(--accent); border-color: var(--accent); color: white; }
+.app-body .primary:hover, .app-body input[type=submit]:hover { background: #1a523c; color: white; }
+.import-button { font-weight: 550 !important; }
+.app-body input:not([type=checkbox]):not([type=radio]):not([type=submit]), .app-body select, .app-body textarea {
+    background: white; color: var(--ink); border: 1px solid #d5ded6; border-radius: 6px; padding: 9px 11px; box-shadow: none; font: inherit; font-size: 13px; }
+.app-body input[type=checkbox], .app-body input[type=radio] { accent-color: var(--accent); width: auto; }
+.app-body label { font-size: 12px; color: #526258; }
+.app-body fieldset { border: 1px solid var(--line); border-radius: 8px; }
+.app-body table { background: white; border: 1px solid var(--line); border-radius: 9px; border-spacing: 0; width: 100%; font-size: 13px; }
+.app-body th { padding: 13px 12px; background: #edf1ed; font-size: 11px; color: #5f6e63; font-weight: 600; text-align: left; }
+.app-body td { padding: 12px; border-bottom: 1px solid #edf1ed; }
+.app-body tr:nth-child(even) { background: #fafbfa; }
+.app-body tr:hover td { background: #f0f5f0; }
+.app-body .value { text-align: right; font-variant-numeric: tabular-nums; }
+.app-body .table-row-control { opacity: .5; }
+.app-body .table-row-control:focus-within, .app-body tr:hover .table-row-control { opacity: 1; }
+.app-body .search-filter { justify-content: flex-start; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin: 24px 0; padding: 18px; background: #e9eeea; border-radius: 8px; }
+.app-body .search-filter input[type=date] { width: 148px; }
+.app-body .hint { color: var(--muted); font-size: 13px; line-height: 1.65; text-align: left; }
+.app-body h2 { font-size: 19px; font-weight: 600; color: var(--ink); letter-spacing: -.3px; }
+.app-body .menu { display: flex; gap: 6px; justify-content: flex-start; border-bottom: 1px solid var(--line); margin: 0 0 26px; padding: 0; text-align: left; }
+.app-body .menu a { display: block; margin: 0; padding: 12px 16px; color: #6c776f; font-size: 13px; border-bottom: 2px solid transparent; }
+.app-body .menu a[aria-current=page] { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.app-body .menu a:hover { text-decoration: none; background: #eaf0ea; }
+.app-body .chart-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; background: #e9eeea; padding: 17px 20px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 18px; }
+.app-body .chart-filter > label { display: flex; flex-direction: column; margin: 0; gap: 5px; }
+.app-body .chart-filter fieldset { flex-basis: 100%; margin: 0; padding: 8px 0 0; border: none; border-top: 1px solid #d7e0d8; border-radius: 0; }
+.app-body .chart-filter legend { font-size: 11px; padding: 0 8px 0 0; color: var(--muted); }
+.app-body .chart-filter fieldset label { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; }
+.chart-quick-periods { display: flex; gap: 5px; margin-left: auto; }
+.app-body .chart-quick-periods button { padding: 9px 12px; background: transparent; }
+.app-body .chart-quick-periods button[aria-pressed=true] { background: white; border-color: #9eb5a4; color: var(--accent); }
+.app-body .chart-card { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; margin: 18px 0; }
+.app-body .chart-card h2 { margin: 0 0 16px; }
+.app-body .chart-status { font-size: 12px; color: var(--muted); min-height: 20px; }
+.app-body .chart-status.error { color: #ad4639; }
+.app-body .xy-chart { width: 100%; height: 400px; }
+.app-body .xy-chart:empty { height: 210px; border-radius: 8px; background: repeating-linear-gradient(to bottom, #fafbf9, #fafbf9 51px, #eaf0e9 52px); }
+.app-body .xy-chart:empty::after { content: 'График появится, когда будут доступны данные'; display: grid; place-items: center; height: 100%; color: #7c887f; font-size: 13px; }
+.methodology { margin-top: 28px; border: 1px solid var(--line); border-radius: 9px; padding: 16px 20px; background: transparent; }
+.methodology summary { cursor: pointer; color: #526a59; font-size: 13px; font-weight: 550; }
+.chart-empty { color: var(--muted); text-align: center; padding: 60px 20px; }
+.app-body #chartdiv { height: 440px; }
+.skip-link { position: fixed; top: -80px; left: 250px; z-index: 100; background: white; padding: 12px; }
+.skip-link:focus { top: 10px; }
+.turbo-progress-bar { background: #6b9a78; height: 3px; }
+.app-body .blink { animation: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.small-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+.welcome-symbol .small-icon { width: 26px; height: 26px; }
+
+.app-body [hidden] { display: none !important; }
+.app-body .search-filter label:first-child select { min-width: 140px; }
+.table-empty { padding: 36px 20px; border: 1px solid var(--line); border-top: none; background: white; text-align: center; color: var(--muted); font-size: 13px; }

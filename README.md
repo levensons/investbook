@@ -198,6 +198,12 @@ Investbook в сравнении с [Intelinvest](https://intelinvest.ru) и [Sn
 > [_Интервью 2023 г_](https://www.youtube.com/watch?v=bOznEZAjX3I&t=5138s)
 </details>
 
+### Подключение через MCP
+
+Локальный MCP-модуль предоставляет шесть инструментов чтения портфеля, распределения активов,
+выплат и сделок. Доступ к счетам задаётся явно; API выключен по умолчанию.
+[Установка, ограничения расчётов и подключение к ChatGPT](docs/mcp/README.md).
+
 ### Как помочь
 Помочь можно, расширяя или корректируя [документацию](https://github.com/spacious-team/investbook/files/5398264/github.docx),
 [сообщая](https://github.com/spacious-team/investbook/issues/new/choose) о проблемах в работе приложения,

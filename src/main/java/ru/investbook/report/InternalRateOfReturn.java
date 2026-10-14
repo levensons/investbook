@@ -59,8 +59,6 @@ public class InternalRateOfReturn {
     private final SecurityEventCashFlowRepository securityEventCashFlowRepository;
     private final ForeignExchangeRateService foreignExchangeRateService;
     private final ZoneId zoneId = ZoneId.systemDefault();
-    private final Xirr.Builder xirrBuilder = Xirr.builder()
-            .withNewtonRaphsonBuilder(NewtonRaphson.builder().withTolerance(0.001)); // in currency units (RUB, USD)
     private final Set<Integer> paymentTypes = Set.of(
             DIVIDEND.getId(),
             COUPON.getId(),
@@ -97,7 +95,7 @@ public class InternalRateOfReturn {
                     .flatMap(Optional::stream)
                     .collect(Collectors.toList());
 
-            getSecurityEventCashFlowEntities(accounts, security, paymentTypes)
+            getSecurityEventCashFlowEntities(accounts, security, paymentTypes, fromDate, toDate)
                     .stream()
                     .map(cash -> castToXirrTransaction(cash, toCurrency))
                     .collect(toCollection(() -> transactions));
@@ -105,7 +103,8 @@ public class InternalRateOfReturn {
             castToXirrTransaction(quote, toCurrency, count, security.getType())
                     .ifPresent(transactions::add);
 
-            return xirrBuilder
+            return Xirr.builder()
+                    .withNewtonRaphsonBuilder(NewtonRaphson.builder().withTolerance(0.001)) // in currency units
                     .withTransactions(transactions)
                     .xirr();
         } catch (Exception e) {
@@ -120,7 +119,7 @@ public class InternalRateOfReturn {
                 .map(t -> transactionCashFlowRepository.findByTransactionIdAndCashFlowType(requireNonNull(t.getId()), PRICE))
                 .flatMap(Optional::stream)
                 .map(TransactionCashFlowEntity::getCurrency)
-                .findAny()
+                .findFirst()
                 .orElseThrow(() -> new RuntimeException("Can't find any transaction payment currency"));
     }
 
@@ -132,7 +131,8 @@ public class InternalRateOfReturn {
     }
 
     private org.decampo.xirr.Transaction castToXirrTransaction(SecurityEventCashFlowEntity cashFlowEntity, String toCurrency) {
-        BigDecimal value = convertToCurrency(cashFlowEntity.getValue(), cashFlowEntity.getCurrency(), toCurrency);
+        BigDecimal value = convertToCurrency(cashFlowEntity.getValue(), cashFlowEntity.getCurrency(), toCurrency,
+                cashFlowEntity.getTimestamp());
         return new org.decampo.xirr.Transaction(
                 value.doubleValue(),
                 toLocalDate(cashFlowEntity.getTimestamp()));
@@ -143,8 +143,10 @@ public class InternalRateOfReturn {
                                                                          String toCurrency, int positionCount,
                                                                          SecurityType securityType) {
         return ofNullable(quote)
+                .filter(_ -> positionCount != 0)
                 .map(_quote -> _quote.getDirtyPriceInCurrency(securityType == DERIVATIVE))
-                .map(dirtyPrice -> convertToCurrency(dirtyPrice, requireNonNull(quote.getCurrency()), toCurrency))
+                .map(dirtyPrice -> convertToCurrency(dirtyPrice, requireNonNull(quote.getCurrency()), toCurrency,
+                        quote.getTimestamp()))
                 .map(dirtyPrice -> new org.decampo.xirr.Transaction(
                         positionCount * dirtyPrice.doubleValue(),
                         toLocalDate(quote.getTimestamp())));
@@ -156,7 +158,7 @@ public class InternalRateOfReturn {
         if (transactionId != null) { // bond redemption, accounted by other way, skipping
             value = transactionCashFlowRepository.findByTransactionId(transactionId)
                     .stream()
-                    .map(entity -> convertToCurrency(entity.getValue(), entity.getCurrency(), toCurrency))
+                    .map(entity -> convertToCurrency(entity.getValue(), entity.getCurrency(), toCurrency, t.getTimestamp()))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
         return (BigDecimal.ZERO.equals(value)) ? empty() : ofNullable(value);
@@ -165,24 +167,32 @@ public class InternalRateOfReturn {
     public List<SecurityEventCashFlowEntity> getSecurityEventCashFlowEntities(Collection<String> accounts,
                                                                               Security security,
                                                                               Set<Integer> cashFlowTypes) {
+        return getSecurityEventCashFlowEntities(accounts, security, cashFlowTypes,
+                ViewFilter.get().getFromDate(), ViewFilter.get().getToDate());
+    }
+
+    private List<SecurityEventCashFlowEntity> getSecurityEventCashFlowEntities(Collection<String> accounts,
+                                                                              Security security,
+                                                                              Set<Integer> cashFlowTypes,
+                                                                              Instant fromDate, Instant toDate) {
         return accounts.isEmpty() ?
                 securityEventCashFlowRepository
                         .findBySecurityIdAndCashFlowTypeIdInAndTimestampBetweenOrderByTimestampAsc(
                                 requireNonNull(security.getId()),
                                 cashFlowTypes,
-                                ViewFilter.get().getFromDate(),
-                                ViewFilter.get().getToDate()) :
+                                fromDate,
+                                toDate) :
                 securityEventCashFlowRepository
                         .findByAccountIdInAndSecurityIdAndCashFlowTypeIdInAndTimestampBetweenOrderByTimestampAsc(
                                 accounts,
                                 requireNonNull(security.getId()),
                                 cashFlowTypes,
-                                ViewFilter.get().getFromDate(),
-                                ViewFilter.get().getToDate());
+                                fromDate,
+                                toDate);
     }
 
-    private BigDecimal convertToCurrency(BigDecimal value, String fromCurrency, String toCurrency) {
-        return foreignExchangeRateService.convertValueToCurrency(value, fromCurrency, toCurrency);
+    private BigDecimal convertToCurrency(BigDecimal value, String fromCurrency, String toCurrency, Instant atDate) {
+        return foreignExchangeRateService.convertValueToCurrency(value, fromCurrency, toCurrency, toLocalDate(atDate));
     }
 
     private LocalDate toLocalDate(Instant instant) {

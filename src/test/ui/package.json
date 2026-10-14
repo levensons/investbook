@@ -1,0 +1,6 @@
+{
+  "name": "investbook-ui-checks",
+  "private": true,
+  "scripts": {"test": "node workspace.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

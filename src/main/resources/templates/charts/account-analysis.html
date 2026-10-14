@@ -19,18 +19,15 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="ru">
 <head>
-    <title>Доходность портфеля</title>
+    <title>Аналитика портфеля</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <link rel="stylesheet" href="/water-light.css">
     <link rel="stylesheet" href="/water-wrapper.css">
     <link rel="stylesheet" href="/charts.css">
-    <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
-    <script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
-    <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
-    <script defer src="/account-analysis-charts.js?v=20260731-1"></script>
+        <th:block th:replace="~{fragments/workspace :: head}"></th:block>
 </head>
 <body>
-<h1>Диаграммы</h1>
+<div class="page-heading"><div><p class="eyebrow">ДИНАМИКА И СТРУКТУРА</p><h1>Аналитика портфеля</h1><p class="page-subtitle">Изменение стоимости и рост на основе ваших данных</p></div></div>
 <a href="/">На главную</a><br>
 <p th:replace="~{charts/menu :: charts_menu}"></p>
 
@@ -43,7 +40,12 @@
         по
         <input id="to-date" name="to" type="date" th:value="${defaultToDate}" required>
     </label>
-    <button type="submit">Показать</button>
+    <button type="submit" class="primary">Применить</button>
+    <div class="chart-quick-periods" aria-label="Быстрый выбор периода">
+        <button type="button" data-period="month">Месяц</button>
+        <button type="button" data-period="year">Год</button>
+        <button type="button" data-period="all">Всё время</button>
+    </div>
 
     <fieldset th:if="${!allAccounts.isEmpty()}">
         <legend>Счета</legend>
@@ -60,7 +62,7 @@
 <p id="chart-status" class="chart-status" role="status" aria-live="polite">Загружаю данные…</p>
 
 <section class="chart-card">
-    <h2>Активы и инвестиции, RUB</h2>
+    <h2>Стоимость и вложения <small>· RUB</small></h2>
     <div id="assets-chart" class="xy-chart"></div>
     <div class="cash-flow-legend" aria-label="Обозначения операций с денежными средствами">
         <span class="cash-flow-deposit">▲ Пополнение</span>
@@ -69,15 +71,25 @@
 </section>
 
 <section class="chart-card">
-    <h2>Рост активов, %</h2>
+    <h2>Рост портфеля <small>· %</small></h2>
     <div id="growth-chart" class="xy-chart"></div>
 </section>
+
+<details class="methodology"><summary>Как рассчитываются показатели</summary>
+<p class="hint">
+    Рост — дневная оценка доходности: чистое пополнение считается внесённым в начале дня,
+    чистый вывод — в конце. Переводы между выбранными счетами в один день взаимно сокращаются.
+    Точное время операций внутри дня не учитывается, поэтому это приближение, а не точный внутридневной TWR.
+</p>
 
     <p class="hint">
         «Расчётная стоимость» строится ежедневно по количеству бумаг из сделок, историческим котировкам MOEX
         и последнему известному денежному остатку. В даты загруженных отчётов расчёт сверяется
         с общей оценкой брокера, а обнаруженная разница учитывается
         до следующей контрольной точки.
+        Валютные позиции и остатки пересчитываются по курсу на дату оценки, денежные потоки — на дату операции.
+        Используется последний сохранённый курс не позже нужной даты.
+        Если исторического курса нет, его нужно загрузить: курс из будущего или условное значение не используются.
     </p>
 
 <p class="hint">
@@ -100,5 +112,6 @@
 <p class="hint">
     Эта страница требует интернет-соединения для загрузки библиотеки amCharts.
 </p>
+</details>
 </body>
 </html>
