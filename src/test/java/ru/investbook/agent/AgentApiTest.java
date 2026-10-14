@@ -13,6 +13,12 @@ package ru.investbook.agent;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.spacious_team.broker.pojo.SecurityType;
+import java.math.BigDecimal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.web.FilterChainProxy;
@@ -205,7 +211,76 @@ class AgentApiTest {
         security.setType(org.spacious_team.broker.pojo.SecurityType.BOND);
         em.find(SecurityQuoteEntity.class, 950002).setPrice(null); em.flush();
         mvc.perform(read("portfolio").param("account_ids", "main")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.holdings[0].unvalued_reason").value("MISSING_PRICE_OR_CURRENCY"));
+                .andExpect(jsonPath("$.data.holdings[0].unvalued_reason").value("MISSING_ABSOLUTE_PRICE"));
+    }
+
+
+    @ParameterizedTest
+    @EnumSource(value = SecurityType.class, names = {"STOCK", "STOCK_OR_BOND", "ASSET"})
+    void monetaryQuotesWithoutSeparatePriceAreValued(SecurityType type) throws Exception {
+        em.find(SecurityEntity.class, 900001).setType(type);
+        em.find(SecurityQuoteEntity.class, 950001).setPrice(null);
+        em.find(SecurityQuoteEntity.class, 950002).setPrice(null); em.flush();
+        mvc.perform(read("portfolio").param("account_ids", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valuation_complete").value(true))
+                .andExpect(jsonPath("$.data.total_rub").value("1192"))
+                .andExpect(jsonPath("$.data.holdings[0].value_rub").value("880"))
+                .andExpect(jsonPath("$.data.holdings[0].unvalued_reason").value(nullValue()));
+        mvc.perform(dated("performance", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.opening.total_rub").value("1100"))
+                .andExpect(jsonPath("$.data.closing.total_rub").value("1192"));
+        mvc.perform(read("allocation").param("account_ids", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valuation_complete").value(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "3"})
+    void genericBondQuoteRequiresAbsolutePriceEvenWithZeroAccruedInterest(String accrued) throws Exception {
+        em.find(SecurityEntity.class, 900001).setType(SecurityType.STOCK_OR_BOND);
+        var quote = em.find(SecurityQuoteEntity.class, 950002);
+        quote.setPrice(null); quote.setAccruedInterest(new BigDecimal(accrued)); em.flush();
+        mvc.perform(read("portfolio").param("account_ids", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valuation_complete").value(false))
+                .andExpect(jsonPath("$.data.total_rub").value(nullValue()))
+                .andExpect(jsonPath("$.data.valued_subtotal_rub").value("312"))
+                .andExpect(jsonPath("$.data.holdings[0].unvalued_reason").value("MISSING_ABSOLUTE_PRICE"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = SecurityType.class, names = {"BOND", "STOCK_OR_BOND"})
+    void bondUsesAbsolutePriceAndAddsAccruedInterestOnce(SecurityType type) throws Exception {
+        em.find(SecurityEntity.class, 900001).setType(type);
+        var quote = em.find(SecurityQuoteEntity.class, 950002);
+        quote.setQuote(new BigDecimal("101")); quote.setPrice(new BigDecimal("1010"));
+        quote.setAccruedInterest(new BigDecimal("3")); em.flush();
+        mvc.perform(read("portfolio").param("account_ids", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valuation_complete").value(true))
+                .andExpect(jsonPath("$.data.total_rub").value("8416"));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" "})
+    void missingQuoteCurrencyIsReportedWithoutAssumingRubles(String currency) throws Exception {
+        em.find(SecurityQuoteEntity.class, 950002).setCurrency(currency); em.flush();
+        mvc.perform(read("portfolio").param("account_ids", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total_rub").value(nullValue()))
+                .andExpect(jsonPath("$.data.valued_subtotal_rub").value("312"))
+                .andExpect(jsonPath("$.data.holdings[0].unvalued_reason").value("MISSING_QUOTE_CURRENCY"))
+                .andExpect(jsonPath("$.warnings", hasItem("MISSING_QUOTE_CURRENCY:main:900001")));
+    }
+
+    @Test void genericMonetaryQuoteUsesHistoricalFxAndExposesStoredFields() throws Exception {
+        em.find(SecurityEntity.class, 900001).setType(SecurityType.STOCK_OR_BOND);
+        var quote = em.find(SecurityQuoteEntity.class, 950002);
+        quote.setPrice(null); quote.setCurrency("ZZZ");
+        AgentFixture.rate(em, "2025-01-03", "200"); em.flush(); fx.invalidateCache();
+        mvc.perform(dated("performance", "main")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.closing.total_rub").value("88312"))
+                .andExpect(jsonPath("$.data.closing.holdings[0].quote").value("110"))
+                .andExpect(jsonPath("$.data.closing.holdings[0].price").value(nullValue()))
+                .andExpect(jsonPath("$.data.closing.holdings[0].accrued_interest").value(nullValue()))
+                .andExpect(jsonPath("$.data.closing.holdings[0].quote_currency").value("ZZZ"));
     }
 
 }
