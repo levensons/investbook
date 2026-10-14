@@ -1,3 +1,5 @@
+> **Запуск одной командой:** [настроить `setup.sh` и `run.sh`](linux-launcher.md) для Linux с systemd, существующей H2-базой и необязательным подключением к ChatGPT.
+
 #### Оглавление
 - [Установка на Windows](install-on-windows.md)
 - [Установка на Mac](install-on-mac.md)
