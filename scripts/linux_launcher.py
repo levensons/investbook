@@ -8,9 +8,11 @@ from __future__ import annotations
 import argparse
 import fcntl
 import getpass
+import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import secrets
 import shlex
@@ -19,6 +21,8 @@ import signal
 import socket
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -115,13 +119,88 @@ def check_stopped():
              "Настройка и обновление не выполняются при открытой базе.")
 
 
+def is_jdk26(java):
+    """Both java and javac are needed to build the application."""
+    try:
+        java = java.resolve(strict=True)
+        for executable, pattern in ((java, r'version "26[.\"]'),
+                                    (java.with_name("javac"), r"javac 26(?:\.|\s|$)")):
+            result = subprocess.run([str(executable), "-version"], capture_output=True, text=True, timeout=15)
+            if result.returncode or not re.search(pattern, result.stderr + result.stdout):
+                return False
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def download_jdk():
+    architecture = {"x86_64": "x64", "amd64": "x64", "aarch64": "aarch64", "arm64": "aarch64"}.get(platform.machine().lower())
+    if not architecture:
+        fail("Автоустановка Java поддерживает Linux x86_64 и ARM64. Установите JDK 26 вручную и задайте JAVA_HOME.")
+    api = f"https://api.adoptium.net/v3/assets/latest/26/hotspot?architecture={architecture}&image_type=jdk&os=linux&vendor=eclipse"
+    print("Подходящая JDK 26 не найдена. Скачиваю Eclipse Temurin 26 для Investbook…", flush=True)
+    print("Системная Java останется прежней. Первая загрузка может занять несколько минут.", flush=True)
+    private_dir(DATA)
+    destination = DATA / "jdk-26"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(api, headers={"User-Agent": "Investbook-Setup"}), timeout=30) as response:
+            assets = json.load(response)
+        asset = assets[0]
+        package = asset["binary"]["package"]
+        url, checksum = package["link"], package["checksum"]
+        if not url.startswith("https://github.com/adoptium/temurin26-binaries/releases/download/") or not re.fullmatch(r"[0-9a-fA-F]{64}", checksum):
+            fail("Сервис Java вернул неподходящую ссылку или контрольную сумму. Установка остановлена.")
+        with tempfile.TemporaryDirectory(prefix="jdk-download-", dir=DATA) as temporary:
+            staging = Path(temporary)
+            archive = staging / "jdk.tar.gz"
+            digest = hashlib.sha256()
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Investbook-Setup"}), timeout=60) as response, archive.open("wb") as output:
+                if not response.geturl().startswith("https://"):
+                    fail("Загрузка Java должна использовать HTTPS.")
+                while chunk := response.read(1024 * 1024):
+                    output.write(chunk)
+                    digest.update(chunk)
+            if digest.hexdigest().lower() != checksum.lower():
+                fail("Контрольная сумма Java не совпала. Архив удалён; повторите ./setup.sh.")
+            unpacked = staging / "unpacked"
+            with tarfile.open(archive, "r:gz") as bundle:
+                bundle.extractall(unpacked, filter="data")
+            roots = list(unpacked.iterdir())
+            if len(roots) != 1 or not is_jdk26(roots[0] / "bin/java"):
+                fail("Загруженная JDK 26 не запускается на этой системе. Установка остановлена.")
+            write_private(roots[0] / "investbook-source.json", json.dumps({
+                "version": asset["version"]["semver"], "url": url, "sha256": checksum,
+            }, indent=2) + "\n")
+            previous = None
+            if destination.exists() or destination.is_symlink():
+                previous = DATA / ("jdk-26-previous-" + secrets.token_hex(4))
+                destination.rename(previous)
+            try:
+                roots[0].rename(destination)
+            except OSError:
+                if previous is not None:
+                    previous.rename(destination)
+                raise
+        print(f"Java 26 установлена: {destination}")
+        return str((destination / "bin/java").resolve())
+    except (urllib.error.URLError, TimeoutError):
+        fail("Не удалось скачать Java 26. Проверьте интернет и доступ к api.adoptium.net и github.com, затем повторите ./setup.sh. "
+             "Можно также установить JDK 26 вручную и задать JAVA_HOME.")
+    except (KeyError, IndexError, TypeError, ValueError, tarfile.TarError):
+        fail("Не удалось проверить или распаковать JDK 26. Установка остановлена; повторите ./setup.sh.")
+
+
 def java_path():
-    candidate = Path(os.environ["JAVA_HOME"]) / "bin/java" if os.environ.get("JAVA_HOME") else Path(tool("java", "Установите JDK 26."))
-    result = subprocess.run([str(candidate), "-version"], capture_output=True, text=True)
-    match = re.search(r'version "(\d+)', result.stderr + result.stdout)
-    if result.returncode or not match or int(match[1]) != 26:
-        fail("Нужна Java 26. Установите JDK 26 и задайте JAVA_HOME перед ./setup.sh.")
-    return str(candidate.resolve())
+    candidates = []
+    if os.environ.get("JAVA_HOME"):
+        candidates.append(Path(os.environ["JAVA_HOME"]) / "bin/java")
+    candidates.append(DATA / "jdk-26/bin/java")
+    if shutil.which("java"):
+        candidates.append(Path(shutil.which("java")))
+    for candidate in candidates:
+        if is_jdk26(candidate):
+            return str(candidate.resolve())
+    return download_jdk()
 
 
 def properties(value):
@@ -226,13 +305,17 @@ def install_entrypoints(config, desktop=True):
             "Icon=accessories-calculator\nTerminal=false\nCategories=Office;Finance;\n")
 
 
-def build_jar(args):
+def build_jar(args, java=None):
     if args.jar:
         jar = args.jar.expanduser().resolve()
     else:
         print("Собираю приложение. Это требуется только при установке и явном обновлении.", flush=True)
+        env = dict(os.environ)
+        if java is not None:
+            env["JAVA_HOME"] = str(Path(java).parent.parent)
+            env["PATH"] = str(Path(java).parent) + os.pathsep + env.get("PATH", "")
         result = subprocess.run(["bash", str(ROOT / "mvnw"), "--batch-mode", "-DskipTests",
-                                 "-Dno-installer", "-Dno-zip", "package"], cwd=ROOT)
+                                 "-Dno-installer", "-Dno-zip", "package"], cwd=ROOT, env=env)
         if result.returncode:
             fail("Сборка не удалась. Установленная версия не заменена; причина приведена выше.")
         jars = list((ROOT / "target").glob("investbook-*.jar"))
@@ -280,7 +363,7 @@ def setup(args):
         if args.extensions_dir:
             config["extensions"] = str(args.extensions_dir.expanduser().resolve(strict=True))
     config["java"] = java_path()
-    jar = build_jar(args)
+    jar = build_jar(args, config["java"])
     if args.update and config.get("mcp", {}).get("package"):
         uv = tool("uv", "Нужен uv для обновления настроенного MCP.")
         subprocess.run([uv, "sync", "--frozen", "--project", config["mcp"]["package"]], check=True)
